@@ -69,6 +69,15 @@ body.locked{overflow:hidden}
 .fiat{font-family:var(--mono);font-weight:500;font-size:clamp(34px,10vw,46px);
   line-height:1.05;letter-spacing:-.02em;margin:12px 0 2px;font-variant-numeric:tabular-nums}
 .fiat .sym{color:var(--brass);font-weight:400}
+.chg{font-family:var(--mono);font-size:12.5px;margin-top:7px;
+  display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.chg .dir{font-weight:500;font-variant-numeric:tabular-nums}
+.chg.up .dir{color:var(--patina)}
+.chg.down .dir{color:var(--oxide)}
+.chg.flat .dir{color:var(--mute)}
+.chg .abs{color:var(--mute);font-variant-numeric:tabular-nums}
+.chg .per{color:var(--mute);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase}
+.masked .chg .abs{filter:blur(7px)}
 .coinline{font-family:var(--mono);font-size:13.5px;color:var(--mute);
   display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:8px}
 .coinline b{font-weight:500}
@@ -269,6 +278,7 @@ input[type=text]:focus,textarea:focus{outline:2px solid var(--brass);outline-off
         </select>
       </div>
       <div class="fiat" id="fiat"><span class="sym">£</span>0.00</div>
+      <div class="chg hidden" id="chg"></div>
       <div class="coinline">
         <span class="b">₿&nbsp;<b id="btcTot">0</b></span>
         <span class="m">ɱ&nbsp;<b id="xmrTot">0</b></span>
@@ -675,7 +685,7 @@ const MEMPOOL = 'https://mempool.space/api';
 
 async function fetchPrices(){
   try{
-    const r = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,monero&vs_currencies=gbp,usd,eur',{cache:'no-store'});
+    const r = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,monero&vs_currencies=gbp,usd,eur&include_24hr_change=true',{cache:'no-store'});
     if(!r.ok) throw new Error(r.status);
     const d = await r.json();
     if(!d.bitcoin || !d.monero) throw new Error('incomplete');
@@ -815,6 +825,29 @@ const estimatedIn = asset => state.holdings
   .reduce((s,h) => s + accrue(h).coins, 0);
 const hasMoved = h => h.type === 'watch' && h.addresses.some(a => a.moved);
 
+/* Value what you hold now at today's price and at the price 24h ago.
+   The coin amounts are identical in both, so buying more cannot move this
+   figure — only the market can. */
+function priceChange(cur, btcAmt, xmrAmt, btcPx, xmrPx){
+  const p = state.prices;
+  if(!p) return null;
+  const key = cur+'_24h_change';
+  let then = 0, now = 0;
+  const leg = (amt, px, src) => {
+    if(amt <= 0) return true;
+    if(!src || src[key] == null || !px) return false;
+    const factor = 1 + src[key]/100;
+    if(factor <= 0) return false;
+    then += amt * (px/factor);
+    now  += amt * px;
+    return true;
+  };
+  if(!leg(btcAmt, btcPx, p.btc)) return null;
+  if(!leg(xmrAmt, xmrPx, p.xmr)) return null;
+  if(then <= 0) return null;
+  return { pct:(now-then)/then*100, abs:now-then };
+}
+
 function render(){
   const cur = state.cur, p = state.prices;
   const btcAmt = state.holdings.filter(h=>h.asset==='BTC').reduce((s,h)=>s+amountOf(h),0);
@@ -842,6 +875,21 @@ function render(){
   $('#stamp').innerHTML = p
     ? (offline ? '<span class="warn">offline \u00B7 '+ago(p.at)+'</span>' : 'checked '+ago(p.at))
     : '';
+
+  const chg = priceChange(cur, btcAmt, xmrAmt, btcPx, xmrPx);
+  const chgEl = $('#chg');
+  if(chg){
+    const up = chg.pct > 0.005, down = chg.pct < -0.005;
+    chgEl.className = 'chg ' + (up ? 'up' : down ? 'down' : 'flat');
+    chgEl.innerHTML =
+      '<span class="dir">'+(up ? '\u2191' : down ? '\u2193' : '\u2192')+' '+
+        Math.abs(chg.pct).toFixed(2)+'%</span>'+
+      '<span class="abs">'+(chg.abs < 0 ? '\u2212' : '+')+fiatFmt(Math.abs(chg.abs),cur)+'</span>'+
+      '<span class="per">24h</span>';
+  }else{
+    chgEl.className = 'chg hidden';
+    chgEl.innerHTML = '';
+  }
 
   const estB = estimatedIn('BTC'), estM = estimatedIn('XMR');
   const note = $('#estNote');
