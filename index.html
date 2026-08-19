@@ -487,13 +487,19 @@ input[type=text]:focus,textarea:focus{outline:2px solid var(--brass);outline-off
     <label class="fld"><span>Label</span>
       <input type="text" id="eLabel" autocomplete="off">
     </label>
-    <label class="fld hidden" id="eAmtWrap"><span>How much you hold</span>
-      <div class="inline">
-        <select class="picker" id="eAmtUnit" aria-label="Enter the amount in"></select>
-        <input type="text" id="eAmount" inputmode="decimal" autocomplete="off">
+    <div class="hidden" id="eAmtWrap">
+      <div class="seg pat" id="eAmtMode">
+        <button data-mode="set" aria-pressed="true">Set to</button>
+        <button data-mode="add" aria-pressed="false">Add to it</button>
       </div>
-      <p class="conv" id="eConv"></p>
-    </label>
+      <label class="fld"><span id="eAmtLabel">How much you hold</span>
+        <div class="inline">
+          <select class="picker" id="eAmtUnit" aria-label="Enter the amount in"></select>
+          <input type="text" id="eAmount" inputmode="decimal" autocomplete="off">
+        </div>
+        <p class="conv" id="eConv"></p>
+      </label>
+    </div>
     <div class="hidden" id="eAddrWrap">
       <label class="fld" style="margin-bottom:6px"><span id="eAddrCount">Addresses</span></label>
       <div class="addr-list" id="eAddrList"></div>
@@ -557,7 +563,7 @@ input[type=text]:focus,textarea:focus{outline:2px solid var(--brass);outline-off
 /* =====================================================================
    STORAGE — device-local, survives refresh, close and reboot.
    ===================================================================== */
-const SHELL_TAG = 'v17';
+const SHELL_TAG = 'v19';
 const KEY = 'assay:v1';
 const store = (() => {
   try{
@@ -810,36 +816,102 @@ function coinsFrom(raw, unit, asset){
   const v = parseFloat(String(raw || '').replace(/[,\s\u00A3$\u20AC]/g,''));
   if(!isFinite(v) || v < 0) return null;
   if(unit === 'coin') return v;
+  if(unit === 'sats') return v/1e8;
   const px = priceOf(asset, unit);
   return px ? v/px : null;
 }
 
-function fillUnits(sel, asset){
+const defaultUnit = asset => asset === 'BTC' ? 'sats' : 'coin';
+
+/* reset===true forces back to the default unit; otherwise the choice sticks */
+function fillUnits(sel, asset, reset){
   const keep = sel.value;
-  sel.innerHTML = '<option value="coin">'+asset+'</option>' +
-    ['gbp','usd','eur'].map(c => '<option value="'+c+'">'+SYM[c]+'</option>').join('');
-  sel.value = (keep && keep !== 'coin' && keep !== asset) ? keep : 'coin';
+  const units = ['coin'].concat(asset === 'BTC' ? ['sats'] : []).concat(['gbp','usd','eur']);
+  sel.innerHTML = units.map(u => '<option value="'+u+'">'+
+    (u === 'coin' ? asset : u === 'sats' ? 'sats' : SYM[u])+'</option>').join('');
+  sel.value = (!reset && keep && units.indexOf(keep) > -1) ? keep : defaultUnit(asset);
+  sel.dataset.prev = sel.value;
 }
 
-function showConv(inputSel, unitSel, outSel, asset){
+/* the inverse of coinsFrom, for prefilling and for switching units */
+function valueInUnit(coins, unit, asset){
+  if(coins == null || !isFinite(coins)) return '';
+  if(unit === 'sats') return String(Math.round(coins*1e8));
+  if(unit === 'coin') return coinFmt(coins, 12);
+  const px = priceOf(asset, unit);
+  return px ? (coins*px).toFixed(2) : '';
+}
+
+/* The field shows a rounded view of an exact figure. Pence cannot hold
+   9,383,697 sats, so the exact value is remembered alongside the text and
+   used until the field is actually edited — merely looking at a holding in
+   pounds must not quietly shave sats off it. */
+function markExact(inputSel, coins){
+  const inp = $(inputSel);
+  inp.dataset.exact = String(coins);
+  inp.dataset.exactFor = inp.value.trim();
+}
+function forgetExact(inputSel){
+  const inp = $(inputSel);
+  delete inp.dataset.exact;
+  delete inp.dataset.exactFor;
+}
+function readCoins(inputSel, unitSel, asset){
+  const inp = $(inputSel), raw = inp.value.trim();
+  if(inp.dataset.exact != null && inp.dataset.exactFor === raw){
+    const c = parseFloat(inp.dataset.exact);
+    if(isFinite(c) && c >= 0) return c;
+  }
+  return coinsFrom(raw, $(unitSel).value, asset);
+}
+
+/* Switching unit converts what is typed rather than reinterpreting the
+   digits — 0.05 BTC becomes 5000000 sats, not 0.05 sats. */
+function convertField(inputSel, unitSel, asset){
+  const sel = $(unitSel);
+  const prev = sel.dataset.prev || defaultUnit(asset);
+  const next = sel.value;
+  sel.dataset.prev = next;
+  const raw = $(inputSel).value.trim();
+  if(!raw || prev === next) return;
+  const inp = $(inputSel);
+  const coins = (inp.dataset.exact != null && inp.dataset.exactFor === raw)
+    ? parseFloat(inp.dataset.exact)
+    : coinsFrom(raw, prev, asset);
+  if(coins == null || !isFinite(coins)) return;
+  const v = valueInUnit(coins, next, asset);
+  if(v !== ''){ inp.value = v; markExact(inputSel, coins); }
+}
+
+function showConv(inputSel, unitSel, outSel, asset, opts){
+  opts = opts || {};
   const unit = $(unitSel).value;
   const raw = $(inputSel).value.trim();
   const out = $(outSel);
-  $(inputSel).placeholder = unit === 'coin' ? '0.0000' : '500';
+  $(inputSel).placeholder = unit === 'coin' ? '0.0000' : unit === 'sats' ? '50000' : '500';
   if(!raw){ out.innerHTML = ''; return; }
-  const coins = coinsFrom(raw, unit, asset);
+
+  const coins = readCoins(inputSel, unitSel, asset);
   if(coins == null){
-    out.innerHTML = (unit !== 'coin' && !priceOf(asset, unit))
+    out.innerHTML = (unit !== 'coin' && unit !== 'sats' && !priceOf(asset, unit))
       ? 'No '+unit.toUpperCase()+' price yet \u2014 enter the amount in '+asset+' instead.' : '';
     return;
   }
-  if(unit === 'coin'){
-    const px = priceOf(asset, state.cur);
-    out.innerHTML = px ? '\u2248 <b>'+fiatFmt(coins*px, state.cur)+'</b> at today\u2019s price' : '';
-  }else{
-    out.innerHTML = '\u2248 <b>'+coinFmt(coins,8)+' '+asset+'</b> at '+
-      fiatFmt(priceOf(asset, unit), unit)+'. Stored as '+asset+', so it moves with the price.';
+
+  const px = priceOf(asset, state.cur);
+  const bits = [];
+  if(unit !== 'coin') bits.push('<b>'+coinFmt(coins,8)+' '+asset+'</b>');
+  if(px) bits.push(fiatFmt(coins*px, state.cur));
+  let line = bits.length ? '\u2248 '+bits.join(' \u00B7 ') : '';
+
+  if(opts.add){
+    const total = (opts.base || 0) + coins;
+    line += (line ? ' \u2014 ' : '')+'new balance <b>'+coinFmt(total,8)+' '+asset+'</b>'+
+      (px ? ' ('+fiatFmt(total*px, state.cur)+')' : '');
+  }else if(unit !== 'coin' && unit !== 'sats'){
+    line += ' \u2014 stored as '+asset+', so it moves with the price';
   }
+  out.innerHTML = line;
 }
 
 /* =====================================================================
@@ -1245,10 +1317,7 @@ function openEdit(id){
     $('#eSettle').value = '';
     renderScheds();
   }else{
-    $('#eAmtUnit').value = 'coin';
-    fillUnits($('#eAmtUnit'), draft.asset);
-    $('#eAmount').value = coinFmt(draft.amount || 0, 12);
-    showConv('#eAmount', '#eAmtUnit', '#eConv', draft.asset);
+    setAmtMode('set', true);
   }
   goto('edit');
   setTimeout(() => $('#eLabel').focus(), 40);
@@ -1437,13 +1506,14 @@ $('#eSave').onclick = async () => {
     }
   }else{
     const unit = $('#eAmtUnit').value;
-    if(unit !== 'coin' && !priceOf(draft.asset, unit))
+    if(unit !== 'coin' && unit !== 'sats' && !priceOf(draft.asset, unit))
       return eMsg('No '+unit.toUpperCase()+' price to convert with yet. Enter the amount in '+draft.asset+' instead.');
-    const amount = coinsFrom($('#eAmount').value, unit, draft.asset);
-    if(amount == null) return eMsg(unit === 'coin'
-      ? 'Enter an amount, like 0.0425.'
-      : 'Enter what it is worth, like 500.');
-    draft.amount = amount;
+    const entered = readCoins('#eAmount', '#eAmtUnit', draft.asset);
+    if(entered == null) return eMsg(
+      unit === 'coin' ? 'Enter an amount, like 0.0425.' :
+      unit === 'sats' ? 'Enter a number of sats, like 50000.' :
+      'Enter what it is worth, like 500.');
+    draft.amount = amtMode === 'add' ? (draft.amount || 0) + entered : entered;
   }
 
   draft.label = label;
@@ -1464,12 +1534,42 @@ $('#eDelete').onclick = async () => {
   render();
 };
 
-$('#eAmount').addEventListener('input', () => {
-  if(draft) showConv('#eAmount','#eAmtUnit','#eConv',draft.asset);
+let amtMode = 'set';
+
+function convOpts(){
+  return amtMode === 'add' ? { add:true, base:(draft ? draft.amount || 0 : 0) } : {};
+}
+function refreshConv(){
+  if(draft) showConv('#eAmount','#eAmtUnit','#eConv', draft.asset, convOpts());
+}
+
+function setAmtMode(mode, reset){
+  amtMode = mode;
+  document.querySelectorAll('#eAmtMode button').forEach(b =>
+    b.setAttribute('aria-pressed', String(b.dataset.mode === mode)));
+  $('#eAmtLabel').textContent = mode === 'add' ? 'Amount to add' : 'How much you hold';
+  if(!draft) return;
+  fillUnits($('#eAmtUnit'), draft.asset, reset);
+  if(mode === 'add'){
+    $('#eAmount').value = '';
+    forgetExact('#eAmount');
+  }else{
+    $('#eAmount').value = valueInUnit(draft.amount || 0, $('#eAmtUnit').value, draft.asset);
+    markExact('#eAmount', draft.amount || 0);
+  }
+  eMsg('');
+  refreshConv();
+}
+
+document.querySelectorAll('#eAmtMode button').forEach(b => b.onclick = () => {
+  setAmtMode(b.dataset.mode);      /* keeps whichever unit is selected */
+  $('#eAmount').focus();
 });
+$('#eAmount').addEventListener('input', () => { forgetExact('#eAmount'); refreshConv(); });
 $('#eAmtUnit').addEventListener('change', () => {
   if(!draft) return;
-  showConv('#eAmount','#eAmtUnit','#eConv',draft.asset);
+  convertField('#eAmount', '#eAmtUnit', draft.asset);
+  refreshConv();
   $('#eAmount').focus();
 });
 $('#sheetX').onclick = closeEdit;
@@ -1480,6 +1580,7 @@ addEventListener('keydown', e => { if(e.key === 'Escape' && stack.length) back()
    ADD FORM
    ===================================================================== */
 let form = { asset:'BTC', mode:'manual' };
+let lastAsset = null;
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : String(Date.now())+Math.random());
 const findByLabel = (label, asset) => {
   const key = (label || '').trim().toLowerCase();
@@ -1499,8 +1600,9 @@ function syncForm(){
   $('#wrapAddr').classList.toggle('hidden', !watching);
   $('#wrapDca').classList.toggle('hidden', !dca);
   $('#wrapAmt').classList.toggle('hidden', watching || dca);
-  fillUnits($('#fAmtUnit'), form.asset);
-  showConv('#fAmount', '#fAmtUnit', '#fConv', form.asset);
+  fillUnits($('#fAmtUnit'), form.asset, form.asset !== lastAsset);
+  lastAsset = form.asset;
+  showConv('#fAmount', '#fAmtUnit', '#fConv', form.asset, {});
   if(!$('#fDcaStart').value) $('#fDcaStart').value = todayISO();
 }
 document.querySelectorAll('#assetSeg button').forEach(b => b.onclick = () => {
@@ -1590,12 +1692,32 @@ $('#addBtn').onclick = async () => {
     await save(); render(); refresh();
   }else{
     const unit = $('#fAmtUnit').value;
-    if(unit !== 'coin' && !priceOf(form.asset, unit))
+    if(unit !== 'coin' && unit !== 'sats' && !priceOf(form.asset, unit))
       return msg('No '+unit.toUpperCase()+' price to convert with yet. Enter the amount in '+form.asset+' instead.');
-    const amount = coinsFrom($('#fAmount').value, unit, form.asset);
-    if(amount == null) return msg(unit === 'coin'
-      ? 'Enter an amount, like 0.0425.'
-      : 'Enter what it is worth, like 500.');
+    const amount = readCoins('#fAmount', '#fAmtUnit', form.asset);
+    if(amount == null) return msg(
+      unit === 'coin' ? 'Enter an amount, like 0.0425.' :
+      unit === 'sats' ? 'Enter a number of sats, like 50000.' :
+      'Enter what it is worth, like 500.');
+
+    const twin = findByLabel(label, form.asset);
+    if(twin){
+      if(twin.type === 'watch'){
+        return msg('\u201C'+twin.label+'\u201D is a watched wallet \u2014 its balance comes from the chain, '+
+          'so adding to it by hand would count the same coins twice. Give this one its own label.');
+      }
+      const held = twin.type === 'manual' ? (twin.amount || 0) : (twin.settledCoins || 0);
+      if(!confirm('Add '+coinFmt(amount,8)+' '+form.asset+' to \u201C'+twin.label+'\u201D?\n\nIt holds '+
+        coinFmt(held,8)+' now, which would become '+coinFmt(held+amount,8)+'.')) return;
+      if(twin.type === 'manual') twin.amount = held + amount;
+      else twin.settledCoins = held + amount;
+      $('#fAmount').value = ''; $('#fLabel').value = ''; $('#fConv').innerHTML = '';
+      msg('Added to \u201C'+twin.label+'\u201D \u2014 now '+coinFmt(held+amount,8)+' '+form.asset+'.', true);
+      await save(); render();
+      flash($('#msg').textContent); msg(''); backToLedger();
+      return;
+    }
+
     state.holdings.push({ id:uid(), asset:form.asset, type:'manual',
       label: label || (form.asset+' balance'), amount:amount });
     $('#fAmount').value = ''; $('#fLabel').value = ''; $('#fConv').innerHTML = '';
@@ -1610,9 +1732,13 @@ $('#addBtn').onclick = async () => {
 };
 ['fLabel','fAmount'].forEach(id =>
   $('#'+id).addEventListener('keydown', e => { if(e.key === 'Enter') $('#addBtn').click(); }));
-$('#fAmount').addEventListener('input', () => showConv('#fAmount','#fAmtUnit','#fConv',form.asset));
+$('#fAmount').addEventListener('input', () => {
+  forgetExact('#fAmount');
+  showConv('#fAmount','#fAmtUnit','#fConv',form.asset,{});
+});
 $('#fAmtUnit').addEventListener('change', () => {
-  showConv('#fAmount','#fAmtUnit','#fConv',form.asset);
+  convertField('#fAmount', '#fAmtUnit', form.asset);
+  showConv('#fAmount','#fAmtUnit','#fConv',form.asset,{});
   $('#fAmount').focus();
 });
 
