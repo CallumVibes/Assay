@@ -5,12 +5,17 @@
      When they fail, the app falls back to the figures it saved on device.
    Bump SHELL_VERSION whenever index.html changes to push the update out. */
 
-const SHELL_VERSION = 'assay-shell-v2';
+const SHELL_VERSION = 'assay-shell-v11';
 const FONT_CACHE    = 'assay-fonts-v1';
 
-const SHELL = [
+/* CORE must cache for offline to work at all. EXTRA is best-effort:
+   one missing icon must not stop the worker installing, which would cost
+   offline support and the install prompt entirely. */
+const CORE = [
   './',
-  './index.html',
+  './index.html'
+];
+const EXTRA = [
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',
@@ -22,7 +27,15 @@ const SHELL = [
 self.addEventListener('install', event => {
   event.waitUntil((async () => {
     const cache = await caches.open(SHELL_VERSION);
-    await cache.addAll(SHELL);
+    try{
+      await cache.addAll(CORE);
+    }catch(e){
+      /* even this failing shouldn't leave a half-registered worker */
+      console.error('[assay] core precache failed', e);
+    }
+    await Promise.all(EXTRA.map(u => cache.add(u).catch(err => {
+      console.warn('[assay] could not cache', u, err);
+    })));
     self.skipWaiting();
   })());
 });
