@@ -72,9 +72,6 @@ body.locked{overflow:hidden}
 .chg{font-family:var(--mono);font-size:12.5px;margin-top:7px;
   display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
 .chg .dir{font-weight:500;font-variant-numeric:tabular-nums}
-.chg.up .dir{color:var(--patina)}
-.chg.down .dir{color:var(--oxide)}
-.chg.flat .dir{color:var(--mute)}
 .chg .abs{color:var(--mute);font-variant-numeric:tabular-nums}
 .chg .per{color:var(--mute);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase}
 .masked .chg .abs{filter:blur(7px)}
@@ -94,10 +91,15 @@ body.locked{overflow:hidden}
 /* groups */
 .group{margin-top:26px}
 .group-head{display:flex;align-items:baseline;gap:10px;padding-bottom:8px;
-  margin-bottom:10px;border-bottom:1px solid var(--rule)}
+  margin-bottom:10px;border-bottom:1px solid var(--rule);flex-wrap:wrap}
 .group-head h2{font-size:11.5px;font-weight:600;letter-spacing:.2em;text-transform:uppercase}
 .group-head .tot{margin-left:auto;font-family:var(--mono);font-size:13px;color:var(--mute);
-  font-variant-numeric:tabular-nums}
+  font-variant-numeric:tabular-nums;white-space:nowrap}
+.chip{font-family:var(--mono);font-size:11px;font-weight:500;
+  font-variant-numeric:tabular-nums;white-space:nowrap}
+.chip.up,.chg.up .dir{color:var(--patina)}
+.chip.down,.chg.down .dir{color:var(--oxide)}
+.chip.flat,.chg.flat .dir{color:var(--mute)}
 .btc h2{color:var(--brass)}
 .xmr h2{color:var(--patina)}
 
@@ -828,24 +830,35 @@ const hasMoved = h => h.type === 'watch' && h.addresses.some(a => a.moved);
 /* Value what you hold now at today's price and at the price 24h ago.
    The coin amounts are identical in both, so buying more cannot move this
    figure — only the market can. */
-function priceChange(cur, btcAmt, xmrAmt, btcPx, xmrPx){
+function assetChange(asset, cur){
   const p = state.prices;
   if(!p) return null;
-  const key = cur+'_24h_change';
+  const src = asset === 'BTC' ? p.btc : p.xmr;
+  const v = src ? src[cur+'_24h_change'] : null;
+  return (v == null || !isFinite(v) || v <= -100) ? null : v;
+}
+
+function priceChange(cur, btcAmt, xmrAmt, btcPx, xmrPx){
+  if(!state.prices) return null;
   let then = 0, now = 0;
-  const leg = (amt, px, src) => {
+  const leg = (asset, amt, px) => {
     if(amt <= 0) return true;
-    if(!src || src[key] == null || !px) return false;
-    const factor = 1 + src[key]/100;
-    if(factor <= 0) return false;
-    then += amt * (px/factor);
+    const chg = assetChange(asset, cur);
+    if(chg == null || !px) return false;
+    then += amt * (px/(1 + chg/100));
     now  += amt * px;
     return true;
   };
-  if(!leg(btcAmt, btcPx, p.btc)) return null;
-  if(!leg(xmrAmt, xmrPx, p.xmr)) return null;
+  if(!leg('BTC', btcAmt, btcPx)) return null;
+  if(!leg('XMR', xmrAmt, xmrPx)) return null;
   if(then <= 0) return null;
   return { pct:(now-then)/then*100, abs:now-then };
+}
+
+function chip(pct, dp){
+  const up = pct > 0.005, down = pct < -0.005;
+  return '<span class="chip '+(up?'up':down?'down':'flat')+'">'+
+    (up?'\u2191':down?'\u2193':'\u2192')+' '+Math.abs(pct).toFixed(dp)+'%</span>';
 }
 
 function render(){
@@ -882,8 +895,7 @@ function render(){
     const up = chg.pct > 0.005, down = chg.pct < -0.005;
     chgEl.className = 'chg ' + (up ? 'up' : down ? 'down' : 'flat');
     chgEl.innerHTML =
-      '<span class="dir">'+(up ? '\u2191' : down ? '\u2193' : '\u2192')+' '+
-        Math.abs(chg.pct).toFixed(2)+'%</span>'+
+      chip(chg.pct, 2).replace('class="chip ','class="dir chip ')+
       '<span class="abs">'+(chg.abs < 0 ? '\u2212' : '+')+fiatFmt(Math.abs(chg.abs),cur)+'</span>'+
       '<span class="per">24h</span>';
   }else{
@@ -921,9 +933,11 @@ function render(){
       sec.className = 'group '+(asset==='BTC'?'btc':'xmr');
       const head = document.createElement('div');
       head.className = 'group-head';
+      const ac = assetChange(asset, cur);
       head.innerHTML = '<h2>'+(asset==='BTC'?'Bitcoin':'Monero')+'</h2>' +
+        (ac == null ? '' : chip(ac, 1)) +
         '<span class="tot">'+(asset==='BTC'?'\u20BF ':'\u0271 ')+coinFmt(sum,8)+
-        (px ? '   \u00B7   '+fiatFmt(sum*px,cur) : '')+'</span>';
+        (px ? ' \u00B7 '+fiatFmt(sum*px,cur) : '')+'</span>';
       sec.appendChild(head);
 
       rows.forEach(h => {
