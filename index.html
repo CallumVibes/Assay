@@ -525,6 +525,12 @@ function migrate(s){
    ===================================================================== */
 const isoOf = d => d.toISOString().slice(0,10);
 const todayISO = () => isoOf(new Date());
+function dateText(iso){
+  if(!iso) return '';
+  const d = new Date(iso+'T00:00:00Z');
+  if(isNaN(d)) return iso;
+  return d.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric',timeZone:'UTC'});
+}
 
 function dcaDates(sc, settledTo, endISO){
   if(!sc.start) return [];
@@ -597,8 +603,12 @@ function spentText(spentBy){
   return Object.keys(spentBy).map(c => money(spentBy[c], c)).join(' + ');
 }
 function schedText(sc){
-  return money(sc.buy, sc.cur)+' '+FREQ_WORD[sc.freq]+' since '+sc.start;
+  const future = sc.start > todayISO();
+  return money(sc.buy, sc.cur)+' '+FREQ_WORD[sc.freq]+
+    (future ? ' from ' : ' since ')+dateText(sc.start);
 }
+const notStarted = h => (h.schedules || []).length > 0 &&
+  (h.schedules || []).every(sc => sc.start > todayISO());
 
 const FREQ_WORD = { daily:'daily', weekly:'weekly', monthly:'monthly' };
 
@@ -699,9 +709,11 @@ async function fetchHistory(asset, cur){
       if(from && (!earliest || from < earliest)) earliest = from;
     });
   });
-  if(!earliest) return;
+  /* every schedule still in the future: nothing to price yet */
+  if(!earliest || earliest > todayISO()) return;
 
-  const span = Math.ceil((Date.now() - new Date(earliest+'T00:00:00Z').getTime())/86400000) + 2;
+  const span = Math.max(2,
+    Math.ceil((Date.now() - new Date(earliest+'T00:00:00Z').getTime())/86400000) + 2);
   const covered = keys.length && keys.sort()[0] <= earliest;
   const days = Math.min(covered ? 4 : span, 3650);
 
@@ -882,7 +894,8 @@ function render(){
           const bits = [];
           if(scheds.length === 1) bits.push(schedText(scheds[0]));
           else bits.push(scheds.length+' schedules'+(live < scheds.length ? ', '+live+' running' : ''));
-          bits.push(acc.buys+' buy'+(acc.buys===1?'':'s'));
+          if(!acc.buys && notStarted(h)) bits.push('nothing counted yet');
+          else bits.push(acc.buys+' buy'+(acc.buys===1?'':'s'));
           if(acc.buys) bits.push(spentText(acc.spentBy)+' in');
           if(acc.unpriced) bits.push(acc.unpriced+' not yet priced');
           sub = bits.join(' \u00B7 ');
@@ -1021,7 +1034,6 @@ function clearSchedForm(){
   $('#eDcaAmt').value = '';
   $('#eDcaFreq').value = 'daily';
   $('#eDcaStart').value = todayISO();
-  $('#eDcaStart').max = todayISO();
   $('#eDcaFee').value = '';
   $('#eSchedSave').textContent = 'Add schedule';
   $('#eSchedCancel').classList.add('hidden');
@@ -1059,7 +1071,8 @@ function renderScheds(){
     row.className = 'sched'+(sc.paused?' off':'')+(schedEdit===i?' editing':'');
     const note = [r.buys+' buy'+(r.buys===1?'':'s')];
     if(r.buys) note.push(money(r.spent, sc.cur)+' in');
-    if(sc.paused) note.push('stopped '+(sc.pausedAt||''));
+    if(sc.paused) note.push('stopped '+dateText(sc.pausedAt));
+    else if(sc.start > todayISO()) note.push('starts '+dateText(sc.start));
     if(r.unpriced) note.push(r.unpriced+' not priced');
     row.innerHTML =
       '<button class="sched-main" type="button"><strong>'+escapeHtml(schedText(sc))+'</strong>'+
@@ -1092,7 +1105,6 @@ function readSchedForm(){
   if(!isFinite(buy) || buy <= 0) return { err:'Enter what each buy costs, like 10.' };
   const start = $('#eDcaStart').value;
   if(!start) return { err:'Set the date of the first buy.' };
-  if(start > todayISO()) return { err:'The first buy cannot be in the future.' };
   const fee = parseFloat(($('#eDcaFee').value || '').replace(/[, %]/g,'')) || 0;
   if(fee < 0 || fee >= 100) return { err:'A fee percentage has to be between 0 and 100.' };
   return { sc:{ id:uid(), buy:buy, cur:$('#eDcaCur').value, freq:$('#eDcaFreq').value,
@@ -1125,7 +1137,7 @@ function renderSettle(){
     (acc.buys ? ', '+spentText(acc.spentBy)+' in' : '')+
     ', estimated at <b>\u007E'+coinFmt(acc.coins,8)+' '+draft.asset+'</b>.';
   if(draft.settledCoins) txt += ' On top of '+coinFmt(draft.settledCoins,8)+
-    ' already confirmed'+(draft.settledTo ? ' as of '+draft.settledTo : '')+', that is '+coinFmt(total,8)+'.';
+    ' already confirmed'+(draft.settledTo ? ' as of '+dateText(draft.settledTo) : '')+', that is '+coinFmt(total,8)+'.';
   if(acc.unpriced) txt += ' '+acc.unpriced+' buy(s) had no price to hand and were left out.';
   txt += ' Fees and the exact time of day will make the real figure drift \u2014 put the true number in '+
     'below whenever you check, and the estimate restarts from today.';
@@ -1224,7 +1236,6 @@ function syncForm(){
   $('#amtLabel').textContent = 'Amount in '+form.asset;
   $('#fAmount').placeholder = form.asset === 'BTC' ? '0.0000' : '0.00';
   if(!$('#fDcaStart').value) $('#fDcaStart').value = todayISO();
-  $('#fDcaStart').max = todayISO();
 }
 document.querySelectorAll('#assetSeg button').forEach(b => b.onclick = () => {
   form.asset = b.dataset.asset;
@@ -1268,7 +1279,6 @@ $('#addBtn').onclick = async () => {
     if(!isFinite(buy) || buy <= 0) return msg('Enter what each buy costs, like 10.');
     const start = $('#fDcaStart').value;
     if(!start) return msg('Set the date of the first buy.');
-    if(start > todayISO()) return msg('The first buy cannot be in the future.');
     const fee = parseFloat(($('#fDcaFee').value || '').replace(/[, %]/g,'')) || 0;
     if(fee < 0 || fee >= 100) return msg('A fee percentage has to be between 0 and 100.');
     const cur = $('#fDcaCur').value, freq = $('#fDcaFreq').value;
