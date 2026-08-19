@@ -52,6 +52,25 @@ body.locked{overflow:hidden}
   font-family:var(--mono);font-size:15px;display:grid;place-items:center;
   cursor:pointer;transition:color .15s,border-color .15s}
 .icon-btn:hover,.icon-btn:focus-visible{color:var(--brass);border-color:var(--brass-lo)}
+.icon-btn.brass{background:var(--brass);border-color:var(--brass);color:var(--ink);
+  font-size:20px;font-weight:600;line-height:1}
+.icon-btn.brass:hover,.icon-btn.brass:focus-visible{color:var(--ink);border-color:var(--brass)}
+
+/* screens */
+.screen{position:fixed;inset:0;z-index:30;background:var(--ink);overflow-y:auto;
+  padding:env(safe-area-inset-top) 0 calc(56px + env(safe-area-inset-bottom));
+  animation:slidein .2s cubic-bezier(.2,.7,.3,1)}
+@keyframes slidein{from{transform:translateX(14px);opacity:.3}to{transform:none;opacity:1}}
+.screen-head{display:flex;align-items:center;gap:12px;padding:22px 0 16px;
+  margin-bottom:14px;border-bottom:1px solid var(--rule)}
+.screen-head h2{font-size:12px;font-weight:600;letter-spacing:.22em;text-transform:uppercase;
+  color:var(--bone)}
+#screenBack{font-size:24px;line-height:0.8;padding-bottom:4px}
+.row.nav .row-label{font-weight:400}
+.row.nav .row-sub{font-family:var(--sans);font-size:12px;white-space:normal}
+.toast{margin:0 0 16px;padding:11px 13px;border:1px solid var(--patina-lo);border-radius:3px;
+  background:#161E1B;color:var(--patina);font-size:12.5px;line-height:1.45;
+  animation:rise .2s ease}
 .icon-btn[aria-busy="true"] svg{animation:spin 1s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 
@@ -127,7 +146,6 @@ body.locked{overflow:hidden}
   font-size:11px;letter-spacing:.08em;text-transform:uppercase;cursor:pointer}
 
 /* forms */
-.add{margin-top:26px;border:1px dashed var(--rule);border-radius:4px;padding:16px 14px}
 .add h2,.keep h2{font-size:11.5px;font-weight:600;letter-spacing:.2em;
   text-transform:uppercase;color:var(--mute);margin-bottom:12px}
 .seg{display:flex;gap:6px;margin-bottom:10px}
@@ -187,7 +205,6 @@ input[type=text]:focus,textarea:focus{outline:2px solid var(--brass);outline-off
 .msg:empty{display:none}
 
 /* data panel */
-.keep{margin-top:26px;border:1px dashed var(--rule);border-radius:4px;padding:16px 14px}
 .keep .where{font-family:var(--mono);font-size:11.5px;color:var(--mute);
   line-height:1.6;margin-bottom:10px}
 .keep .where b{color:var(--patina);font-weight:500}
@@ -242,8 +259,10 @@ input[type=text]:focus,textarea:focus{outline:2px solid var(--brass);outline-off
 .sheet-actions .ghost{flex:1}
 
 .empty{padding:26px 18px;text-align:center;color:var(--mute);font-size:13.5px;line-height:1.55}
-.notes{margin-top:30px;border-top:1px solid var(--rule);padding-top:14px;
-  font-size:11.5px;line-height:1.65;color:var(--mute)}
+.empty button{margin-top:14px;padding:10px 18px;background:var(--brass);border:0;border-radius:3px;
+  color:#15181C;font-family:var(--sans);font-size:12px;font-weight:700;letter-spacing:.1em;
+  text-transform:uppercase;cursor:pointer}
+.notes{font-size:12px;line-height:1.7;color:var(--mute)}
 .notes p+p{margin-top:9px}
 .notes b{color:var(--bone);font-weight:600}
 .hidden{display:none !important}
@@ -253,13 +272,13 @@ input[type=text]:focus,textarea:focus{outline:2px solid var(--brass);outline-off
 </style>
 </head>
 <body>
-<div class="wrap">
+
+<div class="wrap" id="ledgerView">
 
   <header class="masthead">
     <div class="mark">
       <h1>Assay</h1>
       <div class="rule-brass"></div>
-      <p>Balances you enter, plus Bitcoin addresses you watch. No keys, ever.</p>
     </div>
     <div class="tools">
       <button class="icon-btn" id="maskBtn" title="Hide figures" aria-label="Hide figures">◍</button>
@@ -268,10 +287,19 @@ input[type=text]:focus,textarea:focus{outline:2px solid var(--brass);outline-off
           <path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9"/><path d="M13.6 1.9v2.7h-2.7"/>
         </svg>
       </button>
+      <button class="icon-btn brass" id="addBtnTop" title="Add a holding" aria-label="Add a holding">+</button>
+      <button class="icon-btn" id="settingsBtn" title="Settings" aria-label="Settings">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="8" cy="8" r="2.4"/>
+          <path d="M8 1.2v1.9M8 12.9v1.9M1.2 8h1.9M12.9 8h1.9M3.2 3.2l1.35 1.35M11.45 11.45l1.35 1.35M12.8 3.2l-1.35 1.35M4.55 11.45L3.2 12.8"/>
+        </svg>
+      </button>
     </div>
   </header>
 
-  <section class="plate">
+  <p class="toast hidden" id="toast"></p>
+
+<section class="plate">
     <div class="total">
       <div class="eyebrow">
         <span>Total held</span>
@@ -293,14 +321,44 @@ input[type=text]:focus,textarea:focus{outline:2px solid var(--brass);outline-off
 
   <div id="ledger"></div>
 
-  <section class="install hidden" id="installBar">
+<section class="install hidden" id="installBar">
     <p id="installText">Install Assay to your home screen.<small>It then opens full screen, works without a signal, and its storage stops being cleared automatically.</small></p>
     <button class="ghost brass hidden" id="installBtn" style="flex:0 0 auto;min-width:0">Install</button>
     <button class="icon-btn" id="installX" aria-label="Dismiss">×</button>
   </section>
 
-  <section class="add">
-    <h2>Add a holding</h2>
+</div>
+
+<div class="screen hidden" id="screen">
+  <div class="wrap">
+    <header class="screen-head">
+      <button class="icon-btn" id="screenBack" aria-label="Back">‹</button>
+      <h2 id="screenTitle">Settings</h2>
+    </header>
+
+    <div id="panelSettings">
+      <button class="row nav" type="button" data-go="add">
+        <div class="row-main">
+          <div class="row-label">Add a holding</div>
+          <div class="row-sub">An amount, watched addresses, or a repeat buy</div>
+        </div><span class="chev" aria-hidden="true">›</span>
+      </button>
+      <button class="row nav" type="button" data-go="data">
+        <div class="row-main">
+          <div class="row-label">Your data</div>
+          <div class="row-sub" id="dataSummary">Backup, restore, and where it is kept</div>
+        </div><span class="chev" aria-hidden="true">›</span>
+      </button>
+      <button class="row nav" type="button" data-go="about">
+        <div class="row-main">
+          <div class="row-label">How this works</div>
+          <div class="row-sub">What leaves this device, and what Assay cannot do</div>
+        </div><span class="chev" aria-hidden="true">›</span>
+      </button>
+    </div>
+
+    <div id="panelAdd" class="hidden">
+
     <div class="seg" id="assetSeg">
       <button data-asset="BTC" aria-pressed="true">Bitcoin</button>
       <button data-asset="XMR" aria-pressed="false">Monero</button>
@@ -349,10 +407,10 @@ input[type=text]:focus,textarea:focus{outline:2px solid var(--brass);outline-off
     </div>
     <button class="submit" id="addBtn">Add to ledger</button>
     <p class="msg" id="msg"></p>
-  </section>
+    </div>
 
-  <section class="keep">
-    <h2>Your data</h2>
+    <div id="panelData" class="keep hidden">
+
     <p class="where" id="where">Checking where this can be saved…</p>
     <div class="ghosts">
       <button class="ghost hidden" id="persistBtn">Keep it permanently</button>
@@ -361,15 +419,17 @@ input[type=text]:focus,textarea:focus{outline:2px solid var(--brass);outline-off
       <input type="file" id="importFile" accept="application/json,.json" class="hidden">
     </div>
     <p class="msg" id="keepMsg"></p>
-  </section>
+    </div>
 
-  <section class="notes">
+    <div id="panelAbout" class="notes hidden">
+
     <p><b>Where it lives.</b> Everything you enter stays in this browser's storage on this device. There is no account and no server holding your figures. Clearing site data, or deleting the app, deletes them — so take a backup.</p>
     <p><b>What leaves the device.</b> Only watched addresses. They're looked up on mempool.space, which means that server sees which addresses you asked about. Prices come from CoinGecko. Typed amounts are never sent anywhere.</p>
     <p><b>Monero can't be watched by address.</b> Stealth addresses mean an XMR address reveals nothing publicly — reading a balance needs your private view key, which this app will never ask for. Enter Monero amounts by hand.</p>
     <p><b>Never enter a seed phrase or private key here.</b> This app can only read public data. It cannot sign or send anything.</p>
-  </section>
+    </div>
 
+  </div>
 </div>
 
 <div class="scrim hidden" id="scrim">
@@ -921,7 +981,10 @@ function render(){
   const led = $('#ledger');
   led.innerHTML = '';
   if(!state.holdings.length){
-    led.innerHTML = '<div class="group"><div class="plate"><p class="empty">Nothing tallied yet.<br>Add a balance you already know, or paste Bitcoin addresses to watch.</p></div></div>';
+    led.innerHTML = '<div class="group"><div class="plate"><p class="empty">Nothing tallied yet.'+
+      '<br>Add a balance you already know, or paste Bitcoin addresses to watch.'+
+      '<br><button type="button" id="emptyAdd">Add a holding</button></p></div></div>';
+    $('#emptyAdd').onclick = () => goto('add');
   } else {
     ['BTC','XMR'].forEach(asset => {
       const rows = state.holdings.filter(h => h.asset === asset);
@@ -1014,7 +1077,9 @@ function renderWhere(){
       line += ' <b class="warn">Not yet permanent</b> \u2014 a browser can evict it if storage runs low, and iOS clears it after about a week of not opening the app.';
       btn.classList.remove('hidden');
     }
-    el.innerHTML = line;
+      el.innerHTML = line;
+    $('#dataSummary').textContent = n+' holding'+(n===1?'':'s')+' saved on this device'+
+      (persisted === true ? ', marked permanent' : persisted === false ? ' \u2014 not yet permanent' : '');
   }else if(store.kind === 'host'){
     el.innerHTML = '<b>Saved by the preview host.</b> '+n+' holding'+(n===1?'':'s')+
       ' kept for now. Install the app properly for storage that is fully yours.';
@@ -1053,16 +1118,10 @@ function openEdit(id){
     $('#eAmtLabel').textContent = 'Amount in '+draft.asset;
     $('#eAmount').value = coinFmt(draft.amount || 0, 12);
   }
-  $('#scrim').classList.remove('hidden');
-  document.body.classList.add('locked');
+  goto('edit');
   setTimeout(() => $('#eLabel').focus(), 40);
 }
-
-function closeEdit(){
-  $('#scrim').classList.add('hidden');
-  document.body.classList.remove('locked');
-  editId = null; draft = null;
-}
+const closeEdit = back;
 
 function renderDraftAddrs(){
   const list = $('#eAddrList');
@@ -1270,7 +1329,7 @@ $('#eDelete').onclick = async () => {
 
 $('#sheetX').onclick = closeEdit;
 $('#scrim').onclick = e => { if(e.target === $('#scrim')) closeEdit(); };
-addEventListener('keydown', e => { if(e.key === 'Escape' && editId) closeEdit(); });
+addEventListener('keydown', e => { if(e.key === 'Escape' && stack.length) back(); });
 
 /* =====================================================================
    ADD FORM
@@ -1373,8 +1432,8 @@ $('#addBtn').onclick = async () => {
         msg('Added to \u201C'+twin.label+'\u201D \u2014 '+twin.schedules.length+' schedules now feed that row.', true);
       }
       $('#fDcaAmt').value = ''; $('#fLabel').value = '';
-      await save(); render(); refresh();
-      setTimeout(() => { if($('#msg').classList.contains('ok')) msg(''); }, 8000);
+      flash($('#msg').textContent); msg('');
+      await save(); render(); refresh(); backToLedger();
       return;
     }
 
@@ -1393,7 +1452,11 @@ $('#addBtn').onclick = async () => {
     msg('Added. Tap it any time to change the amount.', true);
     await save(); render();
   }
-  setTimeout(() => { if($('#msg').classList.contains('ok')) msg(''); }, 7000);
+  if($('#msg').classList.contains('ok')){
+    flash($('#msg').textContent);
+    msg('');
+    backToLedger();
+  }
 };
 ['fLabel','fAmount'].forEach(id =>
   $('#'+id).addEventListener('keydown', e => { if(e.key === 'Enter') $('#addBtn').click(); }));
@@ -1477,6 +1540,62 @@ addEventListener('appinstalled', async () => {
   await askPersist();
   renderWhere();
 });
+
+/* =====================================================================
+   SCREENS
+   A simple stack. Every level also pushes a history entry, so Android's
+   back gesture steps back through screens instead of leaving the app.
+   ===================================================================== */
+const TITLES = { settings:'Settings', add:'Add a holding', data:'Your data', about:'How this works' };
+const stack = [];
+
+function paintScreen(){
+  const top = stack[stack.length-1] || null;
+  const onSheet = top === 'edit';
+  const onScreen = top && !onSheet;
+
+  $('#scrim').classList.toggle('hidden', !onSheet);
+  $('#screen').classList.toggle('hidden', !onScreen);
+  document.body.classList.toggle('locked', !!top);
+
+  if(onScreen){
+    ['settings','add','data','about'].forEach(name =>
+      $('#panel'+name.charAt(0).toUpperCase()+name.slice(1)).classList.toggle('hidden', name !== top));
+    $('#screenTitle').textContent = TITLES[top] || '';
+    $('#screen').scrollTop = 0;
+  }
+  if(!onSheet && editId){ editId = null; draft = null; }
+}
+
+function goto(name){
+  stack.push(name);
+  history.pushState({ assay:stack.length }, '');
+  paintScreen();
+}
+function back(){ if(stack.length) history.back(); }
+function backToLedger(){ if(stack.length) history.go(-stack.length); }
+
+addEventListener('popstate', e => {
+  /* one popstate may cover several entries (history.go(-2)), so trust the
+     depth recorded in the entry rather than popping blindly */
+  const depth = (e.state && e.state.assay) || 0;
+  if(depth < stack.length) stack.length = depth;
+  paintScreen();
+});
+
+document.querySelectorAll('.row.nav').forEach(b => b.onclick = () => goto(b.dataset.go));
+$('#settingsBtn').onclick = () => goto('settings');
+$('#addBtnTop').onclick = () => goto('add');
+$('#screenBack').onclick = back;
+
+let toastTimer = null;
+function flash(text){
+  const el = $('#toast');
+  el.textContent = text;
+  el.classList.remove('hidden');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.add('hidden'), 9000);
+}
 
 /* =====================================================================
    CHROME + BOOT
