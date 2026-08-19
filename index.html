@@ -347,6 +347,12 @@ input[type=text]:focus,textarea:focus{outline:2px solid var(--brass);outline-off
     </header>
 
     <div id="panelSettings">
+      <button class="row hidden" type="button" id="installRow">
+        <div class="row-main">
+          <div class="row-label">Install this app<span class="tag est">ready</span></div>
+          <div class="row-sub">Run it full screen, offline, with its own icon</div>
+        </div><span class="chev" aria-hidden="true">›</span>
+      </button>
       <button class="row nav" type="button" data-go="add">
         <div class="row-main">
           <div class="row-label">Add a holding</div>
@@ -535,7 +541,7 @@ input[type=text]:focus,textarea:focus{outline:2px solid var(--brass);outline-off
 /* =====================================================================
    STORAGE — device-local, survives refresh, close and reboot.
    ===================================================================== */
-const SHELL_TAG = 'v11';
+const SHELL_TAG = 'v12';
 const KEY = 'assay:v1';
 const store = (() => {
   try{
@@ -1538,10 +1544,15 @@ $('#importFile').onchange = async e => {
    INSTALL
    ===================================================================== */
 let deferredPrompt = null;
+let installOffered = false;   /* did the browser ever fire beforeinstallprompt? */
 const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
 
+/* The banner can be dismissed, but Settings must always keep an install
+   route open — preventDefault() suppresses the browser's own prompt, so
+   hiding ours as well would leave no way in at all. */
 function showInstallBar(){
+  $('#installRow').classList.toggle('hidden', !deferredPrompt);
   if(standalone || state.installDismissed) return;
   if(deferredPrompt){
     $('#installBtn').classList.remove('hidden');
@@ -1551,18 +1562,30 @@ function showInstallBar(){
     $('#installBar').classList.remove('hidden');
   }
 }
-addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredPrompt = e; showInstallBar(); });
-$('#installBtn').onclick = async () => {
-  if(!deferredPrompt) return;
+
+addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredPrompt = e;
+  installOffered = true;
+  showInstallBar();
+});
+
+async function doInstall(){
+  if(!deferredPrompt) return false;
   deferredPrompt.prompt();
-  await deferredPrompt.userChoice;
+  const res = await deferredPrompt.userChoice;
   deferredPrompt = null;
   $('#installBar').classList.add('hidden');
-};
+  $('#installRow').classList.add('hidden');
+  return res && res.outcome === 'accepted';
+}
+$('#installBtn').onclick = doInstall;
+$('#installRow').onclick = doInstall;
 $('#installX').onclick = async () => {
   state.installDismissed = true;
   $('#installBar').classList.add('hidden');
   await save();
+  showInstallBar();   /* keeps the Settings row available */
 };
 addEventListener('appinstalled', async () => {
   $('#installBar').classList.add('hidden');
@@ -1682,6 +1705,17 @@ async function runDiagnostics(){
 
   line(standalone ? 'pass' : 'warn', 'Installed',
     standalone ? 'running standalone' : 'running in a browser tab');
+
+  const brave = !!(navigator.brave && navigator.brave.isBrave);
+  line(deferredPrompt ? 'pass' : installOffered ? 'pass' : standalone ? 'pass' : 'warn',
+    'Install offer',
+    deferredPrompt ? 'ready \u2014 tap Install in Settings'
+      : installOffered ? 'already used'
+      : standalone ? 'already installed'
+      : 'this browser has not offered one');
+  if(brave && !standalone && !installOffered){
+    line('warn', 'Browser', 'Brave \u2014 often withholds it; try Chrome');
+  }
 
   line(store.kind === 'local' ? 'pass' : 'fail', 'Storage',
     store.kind === 'local' ? (persisted === true ? 'device, permanent' : 'device, not permanent')
