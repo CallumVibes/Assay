@@ -5,7 +5,7 @@
      When they fail, the app falls back to the figures it saved on device.
    Bump SHELL_VERSION whenever index.html changes to push the update out. */
 
-const SHELL_VERSION = 'assay-shell-v11';
+const SHELL_VERSION = 'assay-shell-v17';
 const FONT_CACHE    = 'assay-fonts-v1';
 
 /* CORE must cache for offline to work at all. EXTRA is best-effort:
@@ -17,11 +17,9 @@ const CORE = [
 ];
 const EXTRA = [
   './manifest.webmanifest',
-  './icons/icon-192.png',
-  './icons/icon-512.png',
-  './icons/icon-maskable-512.png',
-  './icons/apple-touch-icon.png',
-  './icons/favicon-32.png'
+  './icon-192.png',
+  './icon-512.png',
+  './icon-maskable-512.png'
 ];
 
 self.addEventListener('install', event => {

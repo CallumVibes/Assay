@@ -86,7 +86,10 @@ body.locked{overflow:hidden}
 .cur-select{background:none;border:1px solid var(--rule);border-radius:3px;color:var(--brass);
   font-family:var(--mono);font-size:11px;letter-spacing:.1em;padding:3px 6px;cursor:pointer}
 .fiat{font-family:var(--mono);font-weight:500;font-size:clamp(34px,10vw,46px);
-  line-height:1.05;letter-spacing:-.02em;margin:12px 0 2px;font-variant-numeric:tabular-nums}
+  line-height:1.05;letter-spacing:-.02em;margin:12px 0 2px;font-variant-numeric:tabular-nums;
+  cursor:pointer;user-select:none;-webkit-user-select:none}
+.fiat:focus-visible{outline:2px solid var(--brass);outline-offset:4px;border-radius:2px}
+.eyebrow em{font-style:normal;color:var(--brass-lo);margin-left:6px}
 .fiat .sym{color:var(--brass);font-weight:400}
 .chg{font-family:var(--mono);font-size:12.5px;margin-top:7px;
   display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
@@ -171,6 +174,9 @@ select.picker:focus{outline:2px solid var(--brass);outline-offset:1px;border-col
 input[type=date]{width:100%;padding:10px 12px;background:var(--ink);border:1px solid var(--rule);
   border-radius:3px;color:var(--bone);font-family:var(--mono);font-size:15px}
 input[type=date]:focus{outline:2px solid var(--brass);outline-offset:1px;border-color:transparent}
+.conv{font-family:var(--mono);font-size:11.5px;color:var(--mute);margin-top:6px;line-height:1.5}
+.conv:empty{display:none}
+.conv b{color:var(--brass);font-weight:500}
 .est-note{font-family:var(--mono);font-size:11px;color:var(--mute);margin-top:9px}
 .est-note b{color:var(--brass);font-weight:500}
 .tag.est{color:var(--brass-lo);border-color:var(--brass-lo)}
@@ -312,12 +318,14 @@ input[type=text]:focus,textarea:focus{outline:2px solid var(--brass);outline-off
 <section class="plate">
     <div class="total">
       <div class="eyebrow">
-        <span>Total held</span>
-        <select class="cur-select" id="cur" aria-label="Display currency">
-          <option value="gbp">GBP</option><option value="usd">USD</option><option value="eur">EUR</option>
+        <span>Total held <em id="unitHint">in GBP</em></span>
+        <select class="cur-select" id="cur" aria-label="Priced in">
+          <option value="gbp">GBP</option><option value="usd">USD</option>
+          <option value="eur">EUR</option><option value="xau">GOLD</option>
         </select>
       </div>
-      <div class="fiat" id="fiat"><span class="sym">£</span>0.00</div>
+      <div class="fiat" id="fiat" role="button" tabindex="0"
+        aria-label="Total held. Tap to switch between cash and gold.">£0.00</div>
       <div class="chg hidden" id="chg"></div>
       <div class="coinline">
         <span class="b">₿&nbsp;<b id="btcTot">0</b></span>
@@ -393,8 +401,12 @@ input[type=text]:focus,textarea:focus{outline:2px solid var(--brass);outline-off
     <label class="fld"><span>Label</span>
       <input type="text" id="fLabel" placeholder="Steel plate, phone wallet, exchange…" autocomplete="off">
     </label>
-    <label class="fld" id="wrapAmt"><span id="amtLabel">Amount in BTC</span>
-      <input type="text" id="fAmount" inputmode="decimal" placeholder="0.0000" autocomplete="off">
+    <label class="fld" id="wrapAmt"><span>How much you hold</span>
+      <div class="inline">
+        <select class="picker" id="fAmtUnit" aria-label="Enter the amount in"></select>
+        <input type="text" id="fAmount" inputmode="decimal" placeholder="0.0000" autocomplete="off">
+      </div>
+      <p class="conv" id="fConv"></p>
     </label>
     <label class="fld hidden" id="wrapAddr">
       <span>Public Bitcoin addresses <em>— one per line, they'll be summed</em></span>
@@ -475,8 +487,12 @@ input[type=text]:focus,textarea:focus{outline:2px solid var(--brass);outline-off
     <label class="fld"><span>Label</span>
       <input type="text" id="eLabel" autocomplete="off">
     </label>
-    <label class="fld hidden" id="eAmtWrap"><span id="eAmtLabel">Amount</span>
-      <input type="text" id="eAmount" inputmode="decimal" autocomplete="off">
+    <label class="fld hidden" id="eAmtWrap"><span>How much you hold</span>
+      <div class="inline">
+        <select class="picker" id="eAmtUnit" aria-label="Enter the amount in"></select>
+        <input type="text" id="eAmount" inputmode="decimal" autocomplete="off">
+      </div>
+      <p class="conv" id="eConv"></p>
     </label>
     <div class="hidden" id="eAddrWrap">
       <label class="fld" style="margin-bottom:6px"><span id="eAddrCount">Addresses</span></label>
@@ -541,7 +557,7 @@ input[type=text]:focus,textarea:focus{outline:2px solid var(--brass);outline-off
 /* =====================================================================
    STORAGE — device-local, survives refresh, close and reboot.
    ===================================================================== */
-const SHELL_TAG = 'v12';
+const SHELL_TAG = 'v17';
 const KEY = 'assay:v1';
 const store = (() => {
   try{
@@ -582,8 +598,9 @@ async function askPersist(){
 /* =====================================================================
    STATE
    ===================================================================== */
-let state = { v:4, cur:'gbp', holdings:[], masked:false, prices:null, history:{}, installDismissed:false };
-const SYM = { gbp:'\u00A3', usd:'$', eur:'\u20AC' };
+let state = { v:4, cur:'gbp', gold:false, holdings:[], masked:false, prices:null, history:{}, installDismissed:false };
+const SYM = { gbp:'\u00A3', usd:'$', eur:'\u20AC', xau:'' };
+const OZ_G = 31.1034768;   /* one troy ounce, in grams */
 const $ = s => document.querySelector(s);
 let offline = !navigator.onLine;
 
@@ -722,7 +739,33 @@ const FREQ_WORD = { daily:'daily', weekly:'weekly', monthly:'monthly' };
 /* =====================================================================
    FORMATTING
    ===================================================================== */
-const fiatFmt = (n,cur) => SYM[cur] + n.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
+/* In gold mode the underlying figure is troy ounces, shown as grams —
+   a gram is a quantity you can actually picture. */
+function goldParts(oz){
+  const g = oz * OZ_G;
+  return g >= 1000
+    ? { v:g/1000, unit:'kg', dp:3 }
+    : { v:g,      unit:'g',  dp:2 };
+}
+function fiatFmt(n, cur){
+  if(cur === 'xau'){
+    const p = goldParts(n);
+    return p.v.toLocaleString('en-GB',{minimumFractionDigits:p.dp,maximumFractionDigits:p.dp})+' '+p.unit;
+  }
+  return SYM[cur] + n.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+function bigValue(n, cur){
+  if(cur === 'xau'){
+    const p = goldParts(n);
+    return p.v.toLocaleString('en-GB',{minimumFractionDigits:p.dp,maximumFractionDigits:p.dp})+
+      '<span class="sym"> '+p.unit+'</span>';
+  }
+  return '<span class="sym">'+SYM[cur]+'</span>'+
+    n.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+const hasGold = () => !!(state.prices && state.prices.btc && state.prices.btc.xau != null);
+/* what the figures are actually priced in right now */
+const displayCur = () => (state.gold && hasGold()) ? 'xau' : state.cur;
 function coinFmt(n,dp){
   if(!isFinite(n)) return '0';
   const s = n.toFixed(dp).replace(/0+$/,'').replace(/\.$/,'');
@@ -748,6 +791,55 @@ function ago(ts){
 }
 function escapeHtml(s){
   return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+/* =====================================================================
+   ENTERING AN AMOUNT IN CASH
+   You can type what a holding is worth instead of the coin amount. What
+   gets stored is always the coin amount — converted at today's price —
+   because that is the thing that is actually true tomorrow.
+   ===================================================================== */
+function priceOf(asset, cur){
+  const p = state.prices;
+  if(!p) return null;
+  const src = asset === 'BTC' ? p.btc : p.xmr;
+  return (src && src[cur] != null) ? src[cur] : null;
+}
+
+function coinsFrom(raw, unit, asset){
+  const v = parseFloat(String(raw || '').replace(/[,\s\u00A3$\u20AC]/g,''));
+  if(!isFinite(v) || v < 0) return null;
+  if(unit === 'coin') return v;
+  const px = priceOf(asset, unit);
+  return px ? v/px : null;
+}
+
+function fillUnits(sel, asset){
+  const keep = sel.value;
+  sel.innerHTML = '<option value="coin">'+asset+'</option>' +
+    ['gbp','usd','eur'].map(c => '<option value="'+c+'">'+SYM[c]+'</option>').join('');
+  sel.value = (keep && keep !== 'coin' && keep !== asset) ? keep : 'coin';
+}
+
+function showConv(inputSel, unitSel, outSel, asset){
+  const unit = $(unitSel).value;
+  const raw = $(inputSel).value.trim();
+  const out = $(outSel);
+  $(inputSel).placeholder = unit === 'coin' ? '0.0000' : '500';
+  if(!raw){ out.innerHTML = ''; return; }
+  const coins = coinsFrom(raw, unit, asset);
+  if(coins == null){
+    out.innerHTML = (unit !== 'coin' && !priceOf(asset, unit))
+      ? 'No '+unit.toUpperCase()+' price yet \u2014 enter the amount in '+asset+' instead.' : '';
+    return;
+  }
+  if(unit === 'coin'){
+    const px = priceOf(asset, state.cur);
+    out.innerHTML = px ? '\u2248 <b>'+fiatFmt(coins*px, state.cur)+'</b> at today\u2019s price' : '';
+  }else{
+    out.innerHTML = '\u2248 <b>'+coinFmt(coins,8)+' '+asset+'</b> at '+
+      fiatFmt(priceOf(asset, unit), unit)+'. Stored as '+asset+', so it moves with the price.';
+  }
 }
 
 /* =====================================================================
@@ -782,7 +874,7 @@ const MEMPOOL = 'https://mempool.space/api';
 
 async function fetchPrices(){
   try{
-    const r = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,monero&vs_currencies=gbp,usd,eur&include_24hr_change=true',{cache:'no-store'});
+    const r = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,monero&vs_currencies=gbp,usd,eur,xau&include_24hr_change=true',{cache:'no-store'});
     if(!r.ok) throw new Error(r.status);
     const d = await r.json();
     if(!d.bitcoin || !d.monero) throw new Error('incomplete');
@@ -957,7 +1049,7 @@ function chip(pct, dp){
 }
 
 function render(){
-  const cur = state.cur, p = state.prices;
+  const cur = displayCur(), p = state.prices;
   const btcAmt = state.holdings.filter(h=>h.asset==='BTC').reduce((s,h)=>s+amountOf(h),0);
   const xmrAmt = state.holdings.filter(h=>h.asset==='XMR').reduce((s,h)=>s+amountOf(h),0);
   const btcPx = p && p.btc ? p.btc[cur] : null;
@@ -965,8 +1057,9 @@ function render(){
   const btcVal = btcPx ? btcAmt*btcPx : 0;
   const xmrVal = xmrPx ? xmrAmt*xmrPx : 0;
 
-  $('#fiat').innerHTML = '<span class="sym">'+SYM[cur]+'</span>' +
-    (btcVal+xmrVal).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
+  $('#fiat').innerHTML = bigValue(btcVal+xmrVal, cur);
+  $('#cur').value = cur === 'xau' ? 'xau' : state.cur;
+  $('#unitHint').textContent = cur === 'xau' ? 'in gold' : 'in ' + cur.toUpperCase();
   $('#btcTot').textContent = coinFmt(btcAmt,8);
   $('#xmrTot').textContent = coinFmt(xmrAmt,6);
 
@@ -977,7 +1070,9 @@ function render(){
   const bits = [];
   if(btcPx) bits.push('\u20BF '+fiatFmt(btcPx,cur));
   if(xmrPx) bits.push('\u0271 '+fiatFmt(xmrPx,cur));
-  if(!p) $('#prices').innerHTML = '<span class="warn">No prices yet \u2014 coin amounts still add up</span>';
+  if(state.gold && !hasGold())
+    $('#prices').innerHTML = '<span class="warn">No gold price \u2014 showing '+state.cur.toUpperCase()+'</span>';
+  else if(!p) $('#prices').innerHTML = '<span class="warn">No prices yet \u2014 coin amounts still add up</span>';
   else if(p.partial && !xmrPx) $('#prices').innerHTML = bits.join('   \u00B7   ')+'   \u00B7   <span class="warn">no Monero price</span>';
   else $('#prices').textContent = bits.join('   \u00B7   ');
   $('#stamp').innerHTML = p
@@ -1150,8 +1245,10 @@ function openEdit(id){
     $('#eSettle').value = '';
     renderScheds();
   }else{
-    $('#eAmtLabel').textContent = 'Amount in '+draft.asset;
+    $('#eAmtUnit').value = 'coin';
+    fillUnits($('#eAmtUnit'), draft.asset);
     $('#eAmount').value = coinFmt(draft.amount || 0, 12);
+    showConv('#eAmount', '#eAmtUnit', '#eConv', draft.asset);
   }
   goto('edit');
   setTimeout(() => $('#eLabel').focus(), 40);
@@ -1339,8 +1436,13 @@ $('#eSave').onclick = async () => {
       draft.settledTo = todayISO();
     }
   }else{
-    const amount = parseFloat($('#eAmount').value.replace(/[, ]/g,''));
-    if(!isFinite(amount) || amount < 0) return eMsg('Enter an amount, like 0.0425.');
+    const unit = $('#eAmtUnit').value;
+    if(unit !== 'coin' && !priceOf(draft.asset, unit))
+      return eMsg('No '+unit.toUpperCase()+' price to convert with yet. Enter the amount in '+draft.asset+' instead.');
+    const amount = coinsFrom($('#eAmount').value, unit, draft.asset);
+    if(amount == null) return eMsg(unit === 'coin'
+      ? 'Enter an amount, like 0.0425.'
+      : 'Enter what it is worth, like 500.');
     draft.amount = amount;
   }
 
@@ -1362,6 +1464,14 @@ $('#eDelete').onclick = async () => {
   render();
 };
 
+$('#eAmount').addEventListener('input', () => {
+  if(draft) showConv('#eAmount','#eAmtUnit','#eConv',draft.asset);
+});
+$('#eAmtUnit').addEventListener('change', () => {
+  if(!draft) return;
+  showConv('#eAmount','#eAmtUnit','#eConv',draft.asset);
+  $('#eAmount').focus();
+});
 $('#sheetX').onclick = closeEdit;
 $('#scrim').onclick = e => { if(e.target === $('#scrim')) closeEdit(); };
 addEventListener('keydown', e => { if(e.key === 'Escape' && stack.length) back(); });
@@ -1389,8 +1499,8 @@ function syncForm(){
   $('#wrapAddr').classList.toggle('hidden', !watching);
   $('#wrapDca').classList.toggle('hidden', !dca);
   $('#wrapAmt').classList.toggle('hidden', watching || dca);
-  $('#amtLabel').textContent = 'Amount in '+form.asset;
-  $('#fAmount').placeholder = form.asset === 'BTC' ? '0.0000' : '0.00';
+  fillUnits($('#fAmtUnit'), form.asset);
+  showConv('#fAmount', '#fAmtUnit', '#fConv', form.asset);
   if(!$('#fDcaStart').value) $('#fDcaStart').value = todayISO();
 }
 document.querySelectorAll('#assetSeg button').forEach(b => b.onclick = () => {
@@ -1479,11 +1589,16 @@ $('#addBtn').onclick = async () => {
     msg('Added. Every buy is valued at that day\u2019s price \u2014 tap the row to correct it against your exchange whenever you check.', true);
     await save(); render(); refresh();
   }else{
-    const amount = parseFloat($('#fAmount').value.replace(/[, ]/g,''));
-    if(!isFinite(amount) || amount < 0) return msg('Enter an amount, like 0.0425.');
+    const unit = $('#fAmtUnit').value;
+    if(unit !== 'coin' && !priceOf(form.asset, unit))
+      return msg('No '+unit.toUpperCase()+' price to convert with yet. Enter the amount in '+form.asset+' instead.');
+    const amount = coinsFrom($('#fAmount').value, unit, form.asset);
+    if(amount == null) return msg(unit === 'coin'
+      ? 'Enter an amount, like 0.0425.'
+      : 'Enter what it is worth, like 500.');
     state.holdings.push({ id:uid(), asset:form.asset, type:'manual',
       label: label || (form.asset+' balance'), amount:amount });
-    $('#fAmount').value = ''; $('#fLabel').value = '';
+    $('#fAmount').value = ''; $('#fLabel').value = ''; $('#fConv').innerHTML = '';
     msg('Added. Tap it any time to change the amount.', true);
     await save(); render();
   }
@@ -1495,6 +1610,11 @@ $('#addBtn').onclick = async () => {
 };
 ['fLabel','fAmount'].forEach(id =>
   $('#'+id).addEventListener('keydown', e => { if(e.key === 'Enter') $('#addBtn').click(); }));
+$('#fAmount').addEventListener('input', () => showConv('#fAmount','#fAmtUnit','#fConv',form.asset));
+$('#fAmtUnit').addEventListener('change', () => {
+  showConv('#fAmount','#fAmtUnit','#fConv',form.asset);
+  $('#fAmount').focus();
+});
 
 /* =====================================================================
    DATA PANEL
@@ -1663,8 +1783,10 @@ async function runDiagnostics(){
     line('fail', 'Service worker', 'not supported here');
   }else{
     try{
+      const sw = await probe('./sw.js');
+      line(sw.ok ? 'pass' : 'fail', 'sw.js file', sw.ok ? 'found' : sw.note+' \u2014 upload it');
       const reg = await navigator.serviceWorker.getRegistration();
-      if(!reg) line('fail', 'Service worker', 'not registered');
+      if(!reg) line('fail', 'Service worker', swError ? swError : 'not registered');
       else{
         const w = reg.active || reg.waiting || reg.installing;
         line(reg.active ? 'pass' : 'warn', 'Service worker', w ? w.state : 'unknown');
@@ -1688,19 +1810,27 @@ async function runDiagnostics(){
   const man = await probe('./manifest.webmanifest');
   line(man.ok ? 'pass' : 'fail', 'Manifest', man.note);
 
-  const icons = ['icons/icon-192.png','icons/icon-512.png','icons/icon-maskable-512.png'];
-  let found = 0;
-  for(const f of icons){ const r = await probe('./'+f); if(r.ok) found++; }
-  /* the manifest also carries embedded copies, so missing files are cosmetic */
-  line(found ? 'pass' : 'warn', 'Icon files',
-    found ? found+' of '+icons.length+' found' : 'none in repo \u2014 using embedded');
+  /* Android mints the installed app on Google's servers, and those servers
+     fetch these icons over the network. A 404 here means no real install —
+     you get a plain home-screen shortcut instead. */
+  const icons = ['icon-192.png','icon-512.png','icon-maskable-512.png'];
+  const missing = [];
+  for(const f of icons){ const r = await probe('./'+f); if(!r.ok) missing.push(f); }
+  line(missing.length ? 'fail' : 'pass', 'Icon files',
+    missing.length ? missing.length+' of '+icons.length+' missing \u2014 upload them' : 'all '+icons.length+' found');
 
   try{
     const r = await fetch('./manifest.webmanifest', {cache:'no-store'});
     const j = await r.json();
-    const embedded = (j.icons||[]).filter(i => (i.src||'').indexOf('data:') === 0).length;
-    line(embedded ? 'pass' : 'fail', 'Installable icon',
-      embedded ? embedded+' embedded in manifest' : 'none \u2014 install will be refused');
+    const big = (j.icons||[]).filter(i => {
+      const any = (i.purpose||'any').indexOf('any') > -1;
+      const px = parseInt((i.sizes||'0x0').split('x')[0], 10);
+      return any && px >= 192 && (i.src||'').indexOf('data:') !== 0;
+    }).length;
+    line(big ? 'pass' : 'fail', 'Installable icon',
+      big ? big+' fetchable, 192px+' : 'none \u2014 Android will only make a shortcut');
+    line(j.id ? 'warn' : 'pass', 'Manifest id',
+      j.id ? 'set to '+j.id+' \u2014 may clash with another app' : 'defaults to start_url');
   }catch(e){ line('fail', 'Installable icon', 'manifest unreadable'); }
 
   line(standalone ? 'pass' : 'warn', 'Installed',
@@ -1723,6 +1853,8 @@ async function runDiagnostics(){
 
   line('pass', 'Holdings saved', state.holdings.length + (state.holdings.length === 1 ? ' holding' : ' holdings'));
   line('pass', 'App version', SHELL_TAG);
+  line('pass', 'Serving from', location.origin + location.pathname);
+  line('pass', 'Icon URL', new URL('./icon-192.png', location.href).href);
 
   const el = $('#diagList');
   el.innerHTML = '';
@@ -1770,7 +1902,28 @@ function flash(text){
 /* =====================================================================
    CHROME + BOOT
    ===================================================================== */
-$('#cur').onchange = async e => { state.cur = e.target.value; await save(); render(); };
+async function setUnit(v){
+  if(v === 'xau'){
+    state.gold = true;
+  }else{
+    state.gold = false;
+    state.cur = v;
+  }
+  await save();
+  render();
+}
+
+$('#cur').onchange = e => setUnit(e.target.value);
+
+/* Tap the total to flip between cash and gold. */
+async function toggleGold(){
+  if(!state.gold && !hasGold()) return;   /* nothing to switch to yet */
+  await setUnit(state.gold ? state.cur : 'xau');
+}
+$('#fiat').onclick = toggleGold;
+$('#fiat').addEventListener('keydown', e => {
+  if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); toggleGold(); }
+});
 $('#maskBtn').onclick = async () => { state.masked = !state.masked; await save(); render(); };
 $('#refreshBtn').onclick = refresh;
 addEventListener('online', () => { offline = false; refresh(); });
@@ -1779,8 +1932,10 @@ document.addEventListener('visibilitychange', () => {
   if(document.visibilityState === 'visible' && state.prices && Date.now()-state.prices.at > 120000) refresh();
 });
 
+let swError = null;
 if('serviceWorker' in navigator && location.protocol === 'https:'){
-  addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(function(){}));
+  addEventListener('load', () => navigator.serviceWorker.register('./sw.js')
+    .catch(e => { swError = e && e.message ? e.message : String(e); }));
 }
 
 (async function init(){
