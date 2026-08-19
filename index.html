@@ -1,0 +1,952 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Assay — what you hold</title>
+<meta name="description" content="A watch-only tally of the Bitcoin and Monero you hold across every wallet.">
+
+<link rel="manifest" href="./manifest.webmanifest">
+<meta name="theme-color" content="#131519">
+<link rel="icon" href="./icons/favicon-32.png" sizes="32x32">
+<link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Assay">
+<meta name="mobile-web-app-capable" content="yes">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#131519; --panel:#191D23; --plate:#20252C; --rule:#2E353D;
+  --brass:#C8A75E; --brass-lo:#8A7238;
+  --patina:#79A697; --patina-lo:#4C6E63;
+  --oxide:#C15B45; --bone:#EAE6DC; --mute:#8A9199;
+  --sans:'Archivo',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,'SF Mono',Menlo,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%;background:var(--ink)}
+body{
+  background:var(--ink);color:var(--bone);font-family:var(--sans);
+  font-size:16px;line-height:1.45;min-height:100vh;
+  padding:env(safe-area-inset-top) 0 calc(64px + env(safe-area-inset-bottom));
+  -webkit-tap-highlight-color:transparent;
+}
+body.locked{overflow:hidden}
+.wrap{max-width:620px;margin:0 auto;padding:0 18px}
+
+/* header */
+.masthead{padding:28px 0 18px;display:flex;align-items:flex-start;gap:14px}
+.mark{flex:1;min-width:0}
+.mark h1{font-size:22px;font-weight:700;letter-spacing:.34em;text-transform:uppercase}
+.mark .rule-brass{height:2px;margin:9px 0;opacity:.75;
+  background:linear-gradient(90deg,var(--brass-lo),var(--brass) 22%,var(--brass-lo) 60%,transparent)}
+.mark p{font-size:12.5px;color:var(--mute)}
+.tools{display:flex;gap:8px;padding-top:2px}
+.icon-btn{width:38px;height:38px;flex:0 0 38px;background:var(--plate);
+  border:1px solid var(--rule);border-radius:3px;color:var(--mute);
+  font-family:var(--mono);font-size:15px;display:grid;place-items:center;
+  cursor:pointer;transition:color .15s,border-color .15s}
+.icon-btn:hover,.icon-btn:focus-visible{color:var(--brass);border-color:var(--brass-lo)}
+.icon-btn[aria-busy="true"] svg{animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* plate */
+.plate{position:relative;background:var(--plate);border:1px solid var(--rule);
+  border-radius:4px;overflow:hidden;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.055),inset 0 -1px 0 rgba(0,0,0,.45),0 10px 26px -18px #000}
+.plate::after{content:"";position:absolute;inset:0;pointer-events:none;
+  background:repeating-linear-gradient(96deg,rgba(255,255,255,.017) 0 1px,transparent 1px 4px)}
+.total{padding:22px 20px 18px}
+.eyebrow{font-size:10.5px;letter-spacing:.22em;text-transform:uppercase;color:var(--mute);
+  display:flex;justify-content:space-between;align-items:center;gap:10px}
+.cur-select{background:none;border:1px solid var(--rule);border-radius:3px;color:var(--brass);
+  font-family:var(--mono);font-size:11px;letter-spacing:.1em;padding:3px 6px;cursor:pointer}
+.fiat{font-family:var(--mono);font-weight:500;font-size:clamp(34px,10vw,46px);
+  line-height:1.05;letter-spacing:-.02em;margin:12px 0 2px;font-variant-numeric:tabular-nums}
+.fiat .sym{color:var(--brass);font-weight:400}
+.coinline{font-family:var(--mono);font-size:13.5px;color:var(--mute);
+  display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:8px}
+.coinline b{font-weight:500}
+.coinline .b{color:var(--brass)}
+.coinline .m{color:var(--patina)}
+.split{display:flex;height:5px;background:var(--rule)}
+.split i{display:block;height:100%;transition:width .5s ease}
+.split .sb{background:var(--brass)}
+.split .sm{background:var(--patina)}
+.priceline{padding:9px 20px;font-family:var(--mono);font-size:11px;color:var(--mute);
+  border-top:1px solid var(--rule);display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.priceline .warn{color:var(--oxide)}
+
+/* groups */
+.group{margin-top:26px}
+.group-head{display:flex;align-items:baseline;gap:10px;padding-bottom:8px;
+  margin-bottom:10px;border-bottom:1px solid var(--rule)}
+.group-head h2{font-size:11.5px;font-weight:600;letter-spacing:.2em;text-transform:uppercase}
+.group-head .tot{margin-left:auto;font-family:var(--mono);font-size:13px;color:var(--mute);
+  font-variant-numeric:tabular-nums}
+.btc h2{color:var(--brass)}
+.xmr h2{color:var(--patina)}
+
+.row{display:flex;align-items:center;gap:12px;width:100%;text-align:left;
+  padding:13px 14px;background:var(--panel);color:inherit;font:inherit;
+  border:1px solid var(--rule);border-left-width:3px;border-radius:3px;
+  margin-bottom:8px;cursor:pointer;transition:border-color .15s}
+.btc .row{border-left-color:var(--brass-lo)}
+.xmr .row{border-left-color:var(--patina-lo)}
+.row:hover,.row:focus-visible{border-color:var(--brass-lo)}
+.row.moved{border-color:var(--oxide);background:#231A19}
+.row-main{flex:1;min-width:0}
+.row-label{font-size:14.5px;font-weight:500;display:flex;align-items:center;gap:7px}
+.tag{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--mute);border:1px solid var(--rule);border-radius:2px;padding:1px 4px;flex:0 0 auto}
+.row-sub{font-family:var(--mono);font-size:11px;color:var(--mute);margin-top:3px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row-sub.alert{color:var(--oxide)}
+.row-amt{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;flex:0 0 auto}
+.row-amt .a{font-size:14.5px;font-weight:500;display:block}
+.row-amt .f{font-size:11.5px;color:var(--mute);display:block;margin-top:2px}
+.chev{color:var(--rule);font-family:var(--mono);font-size:15px;flex:0 0 auto}
+.seen-btn{display:block;width:100%;margin:-4px 0 10px;padding:8px;background:#2A1E1C;
+  border:1px solid var(--oxide);border-radius:3px;color:var(--oxide);font-family:var(--mono);
+  font-size:11px;letter-spacing:.08em;text-transform:uppercase;cursor:pointer}
+
+/* forms */
+.add{margin-top:26px;border:1px dashed var(--rule);border-radius:4px;padding:16px 14px}
+.add h2,.keep h2{font-size:11.5px;font-weight:600;letter-spacing:.2em;
+  text-transform:uppercase;color:var(--mute);margin-bottom:12px}
+.seg{display:flex;gap:6px;margin-bottom:10px}
+.seg button{flex:1;padding:9px 4px;background:var(--panel);border:1px solid var(--rule);
+  border-radius:3px;color:var(--mute);font-family:var(--mono);font-size:11.5px;
+  letter-spacing:.08em;text-transform:uppercase;cursor:pointer;transition:.15s}
+.seg button[aria-pressed="true"]{color:var(--ink);background:var(--brass);
+  border-color:var(--brass);font-weight:600}
+.seg.pat button[aria-pressed="true"]{background:var(--patina);border-color:var(--patina)}
+label.fld{display:block;margin-bottom:10px}
+label.fld span{display:block;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--mute);margin-bottom:5px}
+label.fld em{font-style:normal;color:var(--mute);text-transform:none;letter-spacing:0;
+  font-family:var(--sans);font-size:11.5px}
+input[type=text],textarea{width:100%;padding:11px 12px;background:var(--ink);
+  border:1px solid var(--rule);border-radius:3px;color:var(--bone);
+  font-family:var(--mono);font-size:16px;resize:vertical}
+textarea{min-height:78px;line-height:1.5}
+input[type=text]:focus,textarea:focus{outline:2px solid var(--brass);outline-offset:1px;border-color:transparent}
+.submit{width:100%;padding:13px;margin-top:4px;background:var(--brass);border:0;border-radius:3px;
+  color:#15181C;font-family:var(--sans);font-size:13px;font-weight:700;letter-spacing:.12em;
+  text-transform:uppercase;cursor:pointer}
+.msg{margin-top:10px;font-size:12.5px;line-height:1.45;color:var(--oxide)}
+.msg.ok{color:var(--patina)}
+.msg:empty{display:none}
+
+/* data panel */
+.keep{margin-top:26px;border:1px dashed var(--rule);border-radius:4px;padding:16px 14px}
+.keep .where{font-family:var(--mono);font-size:11.5px;color:var(--mute);
+  line-height:1.6;margin-bottom:10px}
+.keep .where b{color:var(--patina);font-weight:500}
+.keep .where b.bad{color:var(--oxide)}
+.keep .where b.warn{color:var(--brass)}
+.ghosts{display:flex;gap:8px;flex-wrap:wrap}
+.ghost{flex:1;min-width:110px;padding:10px 8px;background:none;border:1px solid var(--rule);
+  border-radius:3px;color:var(--mute);font-family:var(--mono);font-size:11px;
+  letter-spacing:.08em;text-transform:uppercase;cursor:pointer;text-align:center}
+.ghost:hover,.ghost:focus-visible{color:var(--brass);border-color:var(--brass-lo)}
+.ghost.brass{color:var(--ink);background:var(--brass);border-color:var(--brass);font-weight:600}
+.ghost.oxide{color:var(--oxide);border-color:var(--oxide)}
+.ghost.oxide:hover,.ghost.oxide:focus-visible{background:#2A1E1C;color:var(--oxide)}
+
+/* install */
+.install{margin-top:26px;display:flex;gap:12px;align-items:center;padding:14px;
+  border:1px solid var(--brass-lo);border-radius:4px;background:#1D1B15}
+.install p{flex:1;font-size:12.5px;line-height:1.5}
+.install p small{display:block;color:var(--mute);font-size:11px;margin-top:3px}
+
+/* edit sheet */
+.scrim{position:fixed;inset:0;background:rgba(8,9,11,.72);z-index:40;
+  display:flex;align-items:flex-end;justify-content:center}
+.sheet{width:100%;max-width:620px;max-height:92vh;overflow-y:auto;background:var(--plate);
+  border:1px solid var(--rule);border-bottom:0;border-radius:8px 8px 0 0;
+  padding:20px 18px calc(24px + env(safe-area-inset-bottom));
+  animation:rise .22s cubic-bezier(.2,.7,.3,1)}
+@keyframes rise{from{transform:translateY(22px);opacity:.4}to{transform:none;opacity:1}}
+@media(min-width:640px){
+  .scrim{align-items:center;padding:20px}
+  .sheet{border-radius:6px;border-bottom:1px solid var(--rule)}
+}
+.sheet-head{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+.sheet-head h3{flex:1;font-size:11.5px;font-weight:600;letter-spacing:.2em;
+  text-transform:uppercase;color:var(--mute)}
+.addr-list{margin-bottom:10px}
+.addr{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--ink);
+  border:1px solid var(--rule);border-radius:3px;margin-bottom:6px}
+.addr.moved{border-color:var(--oxide)}
+.addr-main{flex:1;min-width:0}
+.addr code{display:block;font-family:var(--mono);font-size:11.5px;color:var(--bone);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.addr small{display:block;font-family:var(--mono);font-size:10.5px;color:var(--mute);margin-top:2px}
+.addr small.alert{color:var(--oxide)}
+.addr-amt{font-family:var(--mono);font-size:12px;color:var(--brass);
+  font-variant-numeric:tabular-nums;flex:0 0 auto}
+.addr-x{background:none;border:0;color:var(--rule);font-size:19px;line-height:1;
+  cursor:pointer;padding:2px 0 2px 4px;font-family:var(--mono);flex:0 0 auto}
+.addr-x:hover,.addr-x:focus-visible{color:var(--oxide)}
+.sheet-actions{display:flex;gap:8px;margin-top:16px}
+.sheet-actions .submit{margin-top:0;flex:2}
+.sheet-actions .ghost{flex:1}
+
+.empty{padding:26px 18px;text-align:center;color:var(--mute);font-size:13.5px;line-height:1.55}
+.notes{margin-top:30px;border-top:1px solid var(--rule);padding-top:14px;
+  font-size:11.5px;line-height:1.65;color:var(--mute)}
+.notes p+p{margin-top:9px}
+.notes b{color:var(--bone);font-weight:600}
+.hidden{display:none !important}
+.masked .fiat,.masked .row-amt,.masked .coinline,.masked .tot,.masked .addr-amt{filter:blur(9px)}
+:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{animation:none !important;transition:none !important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="mark">
+      <h1>Assay</h1>
+      <div class="rule-brass"></div>
+      <p>Balances you enter, plus Bitcoin addresses you watch. No keys, ever.</p>
+    </div>
+    <div class="tools">
+      <button class="icon-btn" id="maskBtn" title="Hide figures" aria-label="Hide figures">◍</button>
+      <button class="icon-btn" id="refreshBtn" title="Refresh" aria-label="Refresh prices and watched addresses">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+          <path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9"/><path d="M13.6 1.9v2.7h-2.7"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <section class="plate">
+    <div class="total">
+      <div class="eyebrow">
+        <span>Total held</span>
+        <select class="cur-select" id="cur" aria-label="Display currency">
+          <option value="gbp">GBP</option><option value="usd">USD</option><option value="eur">EUR</option>
+        </select>
+      </div>
+      <div class="fiat" id="fiat"><span class="sym">£</span>0.00</div>
+      <div class="coinline">
+        <span class="b">₿&nbsp;<b id="btcTot">0</b></span>
+        <span class="m">ɱ&nbsp;<b id="xmrTot">0</b></span>
+      </div>
+    </div>
+    <div class="split"><i class="sb" id="splitB" style="width:0"></i><i class="sm" id="splitM" style="width:0"></i></div>
+    <div class="priceline"><span id="prices">Fetching prices…</span><span id="stamp"></span></div>
+  </section>
+
+  <div id="ledger"></div>
+
+  <section class="install hidden" id="installBar">
+    <p id="installText">Install Assay to your home screen.<small>It then opens full screen, works without a signal, and its storage stops being cleared automatically.</small></p>
+    <button class="ghost brass hidden" id="installBtn" style="flex:0 0 auto;min-width:0">Install</button>
+    <button class="icon-btn" id="installX" aria-label="Dismiss">×</button>
+  </section>
+
+  <section class="add">
+    <h2>Add a holding</h2>
+    <div class="seg" id="assetSeg">
+      <button data-asset="BTC" aria-pressed="true">Bitcoin</button>
+      <button data-asset="XMR" aria-pressed="false">Monero</button>
+    </div>
+    <div class="seg pat" id="modeSeg">
+      <button data-mode="manual" aria-pressed="true">Type an amount</button>
+      <button data-mode="watch" aria-pressed="false">Watch addresses</button>
+    </div>
+    <label class="fld"><span>Label</span>
+      <input type="text" id="fLabel" placeholder="Steel plate, phone wallet, exchange…" autocomplete="off">
+    </label>
+    <label class="fld" id="wrapAmt"><span id="amtLabel">Amount in BTC</span>
+      <input type="text" id="fAmount" inputmode="decimal" placeholder="0.0000" autocomplete="off">
+    </label>
+    <label class="fld hidden" id="wrapAddr">
+      <span>Public Bitcoin addresses <em>— one per line, they'll be summed</em></span>
+      <textarea id="fAddr" placeholder="bc1&#8230;&#10;bc1&#8230;" autocomplete="off" spellcheck="false"></textarea>
+    </label>
+    <button class="submit" id="addBtn">Add to ledger</button>
+    <p class="msg" id="msg"></p>
+  </section>
+
+  <section class="keep">
+    <h2>Your data</h2>
+    <p class="where" id="where">Checking where this can be saved…</p>
+    <div class="ghosts">
+      <button class="ghost hidden" id="persistBtn">Keep it permanently</button>
+      <button class="ghost" id="exportBtn">Save a backup</button>
+      <button class="ghost" id="importBtn">Restore a backup</button>
+      <input type="file" id="importFile" accept="application/json,.json" class="hidden">
+    </div>
+    <p class="msg" id="keepMsg"></p>
+  </section>
+
+  <section class="notes">
+    <p><b>Where it lives.</b> Everything you enter stays in this browser's storage on this device. There is no account and no server holding your figures. Clearing site data, or deleting the app, deletes them — so take a backup.</p>
+    <p><b>What leaves the device.</b> Only watched addresses. They're looked up on mempool.space, which means that server sees which addresses you asked about. Prices come from CoinGecko. Typed amounts are never sent anywhere.</p>
+    <p><b>Monero can't be watched by address.</b> Stealth addresses mean an XMR address reveals nothing publicly — reading a balance needs your private view key, which this app will never ask for. Enter Monero amounts by hand.</p>
+    <p><b>Never enter a seed phrase or private key here.</b> This app can only read public data. It cannot sign or send anything.</p>
+  </section>
+
+</div>
+
+<div class="scrim hidden" id="scrim">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+    <div class="sheet-head">
+      <h3 id="sheetTitle">Edit holding</h3>
+      <button class="icon-btn" id="sheetX" aria-label="Cancel">&times;</button>
+    </div>
+    <label class="fld"><span>Label</span>
+      <input type="text" id="eLabel" autocomplete="off">
+    </label>
+    <label class="fld hidden" id="eAmtWrap"><span id="eAmtLabel">Amount</span>
+      <input type="text" id="eAmount" inputmode="decimal" autocomplete="off">
+    </label>
+    <div class="hidden" id="eAddrWrap">
+      <label class="fld" style="margin-bottom:6px"><span id="eAddrCount">Addresses</span></label>
+      <div class="addr-list" id="eAddrList"></div>
+      <label class="fld"><span>Add another address <em>— one per line</em></span>
+        <textarea id="eAddrNew" placeholder="bc1&#8230;" autocomplete="off" spellcheck="false"></textarea>
+      </label>
+    </div>
+    <p class="msg" id="eMsg"></p>
+    <div class="sheet-actions">
+      <button class="submit" id="eSave">Save changes</button>
+      <button class="ghost oxide" id="eDelete">Remove</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =====================================================================
+   STORAGE — device-local, survives refresh, close and reboot.
+   ===================================================================== */
+const KEY = 'assay:v1';
+const store = (() => {
+  try{
+    const probe = '__assay_probe__';
+    localStorage.setItem(probe,'1'); localStorage.removeItem(probe);
+    return {
+      kind:'local',
+      async get(){ const v = localStorage.getItem(KEY); return v ? JSON.parse(v) : null; },
+      async set(v){ localStorage.setItem(KEY, JSON.stringify(v)); }
+    };
+  }catch(e){}
+  if(window.storage){
+    return {
+      kind:'host',
+      async get(){ try{ const r = await window.storage.get(KEY); return r && r.value ? JSON.parse(r.value) : null; }catch(e){ return null; } },
+      async set(v){ try{ await window.storage.set(KEY, JSON.stringify(v)); }catch(e){} }
+    };
+  }
+  let mem = null;
+  return { kind:'memory', async get(){ return mem; }, async set(v){ mem = v; } };
+})();
+async function save(){ await store.set(state); }
+
+/* Persistent storage. Without it a browser may evict localStorage to
+   reclaim space, and iOS clears it after ~7 days of not opening a site
+   that hasn't been added to the home screen. */
+let persisted = null;
+async function checkPersist(){
+  if(store.kind !== 'local' || !navigator.storage || !navigator.storage.persisted) return;
+  try{ persisted = await navigator.storage.persisted(); }catch(e){ persisted = null; }
+}
+async function askPersist(){
+  if(!navigator.storage || !navigator.storage.persist) return false;
+  try{ persisted = await navigator.storage.persist(); }catch(e){ persisted = false; }
+  return persisted;
+}
+
+/* =====================================================================
+   STATE
+   ===================================================================== */
+let state = { v:2, cur:'gbp', holdings:[], masked:false, prices:null, installDismissed:false };
+const SYM = { gbp:'\u00A3', usd:'$', eur:'\u20AC' };
+const $ = s => document.querySelector(s);
+let offline = !navigator.onLine;
+
+/* v1 held one address per holding; v2 holds a list of them. */
+function migrate(s){
+  if(!s || !Array.isArray(s.holdings)) return s;
+  s.holdings.forEach(h => {
+    if(h.type === 'watch' && h.address && !h.addresses){
+      h.addresses = [{
+        a:h.address,
+        sats:(h.sats == null ? null : h.sats),
+        txs:(h.txs == null ? null : h.txs),
+        baseSats:(h.baseSats == null ? null : h.baseSats),
+        baseTxs:(h.baseTxs == null ? null : h.baseTxs),
+        pending:!!h.pending, moved:!!h.moved, err:null
+      }];
+      delete h.address; delete h.sats; delete h.txs;
+      delete h.baseSats; delete h.baseTxs; delete h.pending; delete h.moved;
+    }
+    if(h.type === 'watch' && !Array.isArray(h.addresses)) h.addresses = [];
+  });
+  s.v = 2;
+  return s;
+}
+
+/* =====================================================================
+   FORMATTING
+   ===================================================================== */
+const fiatFmt = (n,cur) => SYM[cur] + n.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
+function coinFmt(n,dp){
+  if(!isFinite(n)) return '0';
+  const s = n.toFixed(dp).replace(/0+$/,'').replace(/\.$/,'');
+  return (s === '' || s === '-0') ? '0' : s;
+}
+const shortAddr = a => a.length > 20 ? a.slice(0,10)+'\u2026'+a.slice(-8) : a;
+function ago(ts){
+  if(!ts) return '';
+  const m = Math.round((Date.now()-ts)/60000);
+  if(m < 1) return 'just now';
+  if(m < 60) return m+'m ago';
+  const h = Math.round(m/60);
+  if(h < 24) return h+'h ago';
+  return Math.round(h/24)+'d ago';
+}
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+/* =====================================================================
+   ADDRESS PARSING
+   ===================================================================== */
+const ADDR_RE = /^(bc1[a-z0-9]{25,87}|[13][a-km-zA-HJ-NP-Z1-9]{25,34})$/;
+const tokens = v => v.trim().split(/[\s,;]+/).filter(Boolean);
+
+function looksLikeSecret(v){
+  const t = tokens(v);
+  /* BIP39 words are 3-8 lowercase letters; no Bitcoin address is that short. */
+  if(t.filter(x => /^[a-z]{3,8}$/.test(x)).length >= 6) return true;
+  if(t.some(x => /^[5KL][1-9A-HJ-NP-Za-km-z]{50,51}$/.test(x))) return true;
+  if(t.some(x => /^(xprv|yprv|zprv|tprv|uprv|vprv)/.test(x))) return true;
+  return false;
+}
+const isExtendedPub = v => tokens(v).some(x => /^(xpub|ypub|zpub|tpub|upub|vpub)/.test(x));
+
+function parseAddresses(v){
+  const ok = [], bad = [];
+  for(const t of tokens(v)) (ADDR_RE.test(t) ? ok : bad).push(t);
+  return { ok:Array.from(new Set(ok)), bad };
+}
+const allAddresses = () => new Set(
+  state.holdings.filter(h => h.type === 'watch')
+    .reduce((acc,h) => acc.concat(h.addresses.map(x => x.a)), []));
+
+/* =====================================================================
+   NETWORK
+   ===================================================================== */
+const MEMPOOL = 'https://mempool.space/api';
+
+async function fetchPrices(){
+  try{
+    const r = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,monero&vs_currencies=gbp,usd,eur',{cache:'no-store'});
+    if(!r.ok) throw new Error(r.status);
+    const d = await r.json();
+    if(!d.bitcoin || !d.monero) throw new Error('incomplete');
+    state.prices = { btc:d.bitcoin, xmr:d.monero, at:Date.now(), partial:false };
+    return true;
+  }catch(e){}
+  try{
+    const r = await fetch(MEMPOOL+'/v1/prices',{cache:'no-store'});
+    if(!r.ok) throw new Error(r.status);
+    const d = await r.json();
+    const prev = state.prices;
+    state.prices = { btc:{gbp:d.GBP,usd:d.USD,eur:d.EUR}, xmr:prev?prev.xmr:null, at:Date.now(), partial:true };
+    return true;
+  }catch(e){}
+  return false;
+}
+
+async function fetchAddress(addr){
+  const r = await fetch(MEMPOOL+'/address/'+encodeURIComponent(addr), {cache:'no-store'});
+  if(r.status === 400) throw new Error('rejected as invalid');
+  if(r.status === 429) throw new Error('rate limited, try again shortly');
+  if(!r.ok) throw new Error('lookup failed ('+r.status+')');
+  const d = await r.json();
+  const c = d.chain_stats, m = d.mempool_stats;
+  return {
+    sats:(c.funded_txo_sum-c.spent_txo_sum)+(m.funded_txo_sum-m.spent_txo_sum),
+    txs:c.tx_count+m.tx_count,
+    pending:m.tx_count > 0
+  };
+}
+
+/* Limited concurrency so a 20-address wallet doesn't trip rate limits. */
+async function pool(items, n, fn){
+  const queue = items.slice();
+  const workers = [];
+  for(let i = 0; i < Math.min(n, queue.length); i++){
+    workers.push((async () => { while(queue.length) await fn(queue.shift()); })());
+  }
+  await Promise.all(workers);
+}
+
+let busy = false;
+async function refresh(){
+  if(busy) return;
+  busy = true;
+  $('#refreshBtn').setAttribute('aria-busy','true');
+
+  const watched = [];
+  state.holdings.forEach(h => {
+    if(h.type === 'watch') h.addresses.forEach(a => watched.push([h,a]));
+  });
+
+  await Promise.all([
+    fetchPrices().then(ok => { offline = !ok; }),
+    pool(watched, 3, async pair => {
+      const h = pair[0], a = pair[1];
+      try{
+        const r = await fetchAddress(a.a);
+        a.sats = r.sats; a.txs = r.txs; a.pending = r.pending; a.err = null;
+        if(a.baseTxs == null){ a.baseTxs = r.txs; a.baseSats = r.sats; }
+        else if(r.txs !== a.baseTxs || r.sats !== a.baseSats){ a.moved = true; }
+      }catch(e){
+        a.err = navigator.onLine ? e.message : 'no connection';
+      }
+      h.checkedAt = Date.now();
+    })
+  ]);
+
+  busy = false;
+  $('#refreshBtn').removeAttribute('aria-busy');
+  await save();
+  render();
+}
+
+/* =====================================================================
+   RENDER
+   ===================================================================== */
+function amountOf(h){
+  if(h.type === 'manual') return h.amount || 0;
+  return h.addresses.reduce((s,a) => s + (a.sats == null ? 0 : a.sats/1e8), 0);
+}
+const hasMoved = h => h.type === 'watch' && h.addresses.some(a => a.moved);
+
+function render(){
+  const cur = state.cur, p = state.prices;
+  const btcAmt = state.holdings.filter(h=>h.asset==='BTC').reduce((s,h)=>s+amountOf(h),0);
+  const xmrAmt = state.holdings.filter(h=>h.asset==='XMR').reduce((s,h)=>s+amountOf(h),0);
+  const btcPx = p && p.btc ? p.btc[cur] : null;
+  const xmrPx = p && p.xmr ? p.xmr[cur] : null;
+  const btcVal = btcPx ? btcAmt*btcPx : 0;
+  const xmrVal = xmrPx ? xmrAmt*xmrPx : 0;
+
+  $('#fiat').innerHTML = '<span class="sym">'+SYM[cur]+'</span>' +
+    (btcVal+xmrVal).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
+  $('#btcTot').textContent = coinFmt(btcAmt,8);
+  $('#xmrTot').textContent = coinFmt(xmrAmt,6);
+
+  const tot = btcVal+xmrVal;
+  $('#splitB').style.width = (tot>0 ? btcVal/tot*100 : 0)+'%';
+  $('#splitM').style.width = (tot>0 ? xmrVal/tot*100 : 0)+'%';
+
+  const bits = [];
+  if(btcPx) bits.push('\u20BF '+fiatFmt(btcPx,cur));
+  if(xmrPx) bits.push('\u0271 '+fiatFmt(xmrPx,cur));
+  if(!p) $('#prices').innerHTML = '<span class="warn">No prices yet \u2014 coin amounts still add up</span>';
+  else if(p.partial && !xmrPx) $('#prices').innerHTML = bits.join('   \u00B7   ')+'   \u00B7   <span class="warn">no Monero price</span>';
+  else $('#prices').textContent = bits.join('   \u00B7   ');
+  $('#stamp').innerHTML = p
+    ? (offline ? '<span class="warn">offline \u00B7 '+ago(p.at)+'</span>' : 'checked '+ago(p.at))
+    : '';
+
+  document.body.classList.toggle('masked', state.masked);
+  $('#maskBtn').textContent = state.masked ? '\u25CC' : '\u25CD';
+
+  const led = $('#ledger');
+  led.innerHTML = '';
+  if(!state.holdings.length){
+    led.innerHTML = '<div class="group"><div class="plate"><p class="empty">Nothing tallied yet.<br>Add a balance you already know, or paste Bitcoin addresses to watch.</p></div></div>';
+  } else {
+    ['BTC','XMR'].forEach(asset => {
+      const rows = state.holdings.filter(h => h.asset === asset);
+      if(!rows.length) return;
+      const px = asset==='BTC' ? btcPx : xmrPx;
+      const sum = asset==='BTC' ? btcAmt : xmrAmt;
+
+      const sec = document.createElement('section');
+      sec.className = 'group '+(asset==='BTC'?'btc':'xmr');
+      const head = document.createElement('div');
+      head.className = 'group-head';
+      head.innerHTML = '<h2>'+(asset==='BTC'?'Bitcoin':'Monero')+'</h2>' +
+        '<span class="tot">'+(asset==='BTC'?'\u20BF ':'\u0271 ')+coinFmt(sum,8)+
+        (px ? '   \u00B7   '+fiatFmt(sum*px,cur) : '')+'</span>';
+      sec.appendChild(head);
+
+      rows.forEach(h => {
+        const amt = amountOf(h);
+        const moved = hasMoved(h);
+        const btn = document.createElement('button');
+        btn.className = 'row'+(moved?' moved':'');
+        btn.type = 'button';
+        btn.setAttribute('aria-label','Edit '+h.label);
+
+        let sub = '';
+        if(h.type === 'watch'){
+          const n = h.addresses.length;
+          const nMoved = h.addresses.filter(a=>a.moved).length;
+          const errs = h.addresses.filter(a=>a.err).length;
+          const many = n > 1 ? n+' addresses' : (n ? shortAddr(h.addresses[0].a) : 'no addresses');
+          if(moved) sub = '<span class="alert">Coins moved'+(n>1 ? ' \u00B7 '+nMoved+' of '+n+' addresses' : '')+'</span>';
+          else if(errs) sub = '<span class="alert">'+errs+' of '+n+' could not be checked</span>';
+          else if(h.addresses.some(a=>a.pending)) sub = many+' \u00B7 unconfirmed activity';
+          else sub = many+(h.checkedAt ? ' \u00B7 '+ago(h.checkedAt) : ' \u00B7 not checked yet');
+        }
+
+        btn.innerHTML =
+          '<div class="row-main"><div class="row-label">'+escapeHtml(h.label)+
+            (h.type==='watch' ? '<span class="tag">watched</span>' : '')+'</div>'+
+            (sub ? '<div class="row-sub'+(moved?' alert':'')+'">'+sub+'</div>' : '')+'</div>'+
+          '<div class="row-amt"><span class="a">'+coinFmt(amt,8)+'</span>'+
+            (px ? '<span class="f">'+fiatFmt(amt*px,cur)+'</span>' : '')+'</div>'+
+          '<span class="chev" aria-hidden="true">\u203A</span>';
+        btn.onclick = () => openEdit(h.id);
+        sec.appendChild(btn);
+
+        if(moved){
+          const b = document.createElement('button');
+          b.className = 'seen-btn';
+          b.textContent = 'Seen it \u2014 set this as the new baseline';
+          b.onclick = async () => {
+            h.addresses.forEach(a => { a.moved = false; a.baseTxs = a.txs; a.baseSats = a.sats; });
+            await save(); render();
+          };
+          sec.appendChild(b);
+        }
+      });
+      led.appendChild(sec);
+    });
+  }
+  renderWhere();
+}
+
+function renderWhere(){
+  const n = state.holdings.length;
+  const el = $('#where'), btn = $('#persistBtn');
+  btn.classList.add('hidden');
+  if(store.kind === 'local'){
+    let line = '<b>Saved on this device.</b> '+n+' holding'+(n===1?'':'s')+
+      ' kept in this browser\u2019s storage \u2014 still here after a refresh, a reboot, or offline.';
+    if(persisted === true){
+      line += ' <b>Marked permanent</b>, so the browser won\u2019t clear it to reclaim space.';
+    }else if(persisted === false){
+      line += ' <b class="warn">Not yet permanent</b> \u2014 a browser can evict it if storage runs low, and iOS clears it after about a week of not opening the app.';
+      btn.classList.remove('hidden');
+    }
+    el.innerHTML = line;
+  }else if(store.kind === 'host'){
+    el.innerHTML = '<b>Saved by the preview host.</b> '+n+' holding'+(n===1?'':'s')+
+      ' kept for now. Install the app properly for storage that is fully yours.';
+  }else{
+    el.innerHTML = '<b class="bad">Not being saved.</b> This browser is blocking storage, so anything you enter is lost on refresh. Save a backup before you close it.';
+  }
+}
+
+/* =====================================================================
+   EDIT SHEET
+   ===================================================================== */
+let editId = null, draft = null;
+
+function openEdit(id){
+  const h = state.holdings.find(x => x.id === id);
+  if(!h) return;
+  editId = id;
+  draft = JSON.parse(JSON.stringify(h));   /* so Cancel really cancels */
+  $('#sheetTitle').textContent = draft.type === 'watch' ? 'Edit watched wallet' : 'Edit balance';
+  $('#eLabel').value = draft.label;
+  eMsg('');
+  $('#eAddrNew').value = '';
+  const watching = draft.type === 'watch';
+  $('#eAmtWrap').classList.toggle('hidden', watching);
+  $('#eAddrWrap').classList.toggle('hidden', !watching);
+  if(watching){
+    renderDraftAddrs();
+  }else{
+    $('#eAmtLabel').textContent = 'Amount in '+draft.asset;
+    $('#eAmount').value = coinFmt(draft.amount || 0, 12);
+  }
+  $('#scrim').classList.remove('hidden');
+  document.body.classList.add('locked');
+  setTimeout(() => $('#eLabel').focus(), 40);
+}
+
+function closeEdit(){
+  $('#scrim').classList.add('hidden');
+  document.body.classList.remove('locked');
+  editId = null; draft = null;
+}
+
+function renderDraftAddrs(){
+  const list = $('#eAddrList');
+  list.innerHTML = '';
+  $('#eAddrCount').textContent = draft.addresses.length +
+    (draft.addresses.length === 1 ? ' address' : ' addresses \u2014 summed together');
+  draft.addresses.forEach((a,i) => {
+    const row = document.createElement('div');
+    row.className = 'addr'+(a.moved?' moved':'');
+    let note = '';
+    if(a.err) note = '<small class="alert">'+escapeHtml(a.err)+'</small>';
+    else if(a.moved) note = '<small class="alert">moved since baseline</small>';
+    else if(a.pending) note = '<small>unconfirmed activity</small>';
+    else if(a.sats == null) note = '<small>not checked yet</small>';
+    row.innerHTML =
+      '<div class="addr-main"><code>'+escapeHtml(shortAddr(a.a))+'</code>'+note+'</div>'+
+      '<span class="addr-amt">'+(a.sats == null ? '\u2014' : '\u20BF '+coinFmt(a.sats/1e8,8))+'</span>'+
+      '<button class="addr-x" type="button" aria-label="Remove this address">&times;</button>';
+    row.querySelector('.addr-x').onclick = () => { draft.addresses.splice(i,1); renderDraftAddrs(); };
+    list.appendChild(row);
+  });
+  if(!draft.addresses.length){
+    list.innerHTML = '<p class="msg">No addresses left. Add one below, or remove the whole wallet.</p>';
+  }
+}
+
+function eMsg(t, ok){ const el = $('#eMsg'); el.textContent = t || ''; el.className = 'msg'+(ok?' ok':''); }
+
+$('#eSave').onclick = async () => {
+  if(!draft) return;
+  const label = $('#eLabel').value.trim();
+  if(!label) return eMsg('Give it a label so you can tell it apart.');
+
+  if(draft.type === 'watch'){
+    const raw = $('#eAddrNew').value;
+    if(raw.trim()){
+      if(looksLikeSecret(raw)){
+        $('#eAddrNew').value = '';
+        return eMsg('That looks like a seed phrase or private key. Nothing was saved. Clear your clipboard.');
+      }
+      if(isExtendedPub(raw)) return eMsg('That is an extended public key. Assay cannot derive addresses from one, and storing it would expose every address in that wallet. Paste individual addresses instead.');
+      const parsed = parseAddresses(raw);
+      if(parsed.bad.length) return eMsg('Not a Bitcoin address: '+parsed.bad[0]+(parsed.bad.length>1 ? ' (and '+(parsed.bad.length-1)+' more)' : ''));
+      const here = new Set(draft.addresses.map(x => x.a));
+      const elsewhere = allAddresses();
+      draft.addresses.forEach(x => elsewhere.delete(x.a));
+      for(const a of parsed.ok){
+        if(here.has(a)) continue;
+        if(elsewhere.has(a)) return eMsg(shortAddr(a)+' is already on another wallet in the ledger.');
+        draft.addresses.push({ a:a, sats:null, txs:null, baseSats:null, baseTxs:null, pending:false, moved:false, err:null });
+        here.add(a);
+      }
+    }
+    if(!draft.addresses.length) return eMsg('A watched wallet needs at least one address.');
+  }else{
+    const amount = parseFloat($('#eAmount').value.replace(/[, ]/g,''));
+    if(!isFinite(amount) || amount < 0) return eMsg('Enter an amount, like 0.0425.');
+    draft.amount = amount;
+  }
+
+  draft.label = label;
+  const i = state.holdings.findIndex(h => h.id === editId);
+  if(i > -1) state.holdings[i] = draft;
+  await save();
+  closeEdit();
+  render();
+  refresh();
+};
+
+$('#eDelete').onclick = async () => {
+  if(!draft) return;
+  if(!confirm('Remove "'+draft.label+'" from the ledger?')) return;
+  state.holdings = state.holdings.filter(h => h.id !== editId);
+  await save();
+  closeEdit();
+  render();
+};
+
+$('#sheetX').onclick = closeEdit;
+$('#scrim').onclick = e => { if(e.target === $('#scrim')) closeEdit(); };
+addEventListener('keydown', e => { if(e.key === 'Escape' && editId) closeEdit(); });
+
+/* =====================================================================
+   ADD FORM
+   ===================================================================== */
+let form = { asset:'BTC', mode:'manual' };
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : String(Date.now())+Math.random());
+
+function syncForm(){
+  document.querySelectorAll('#assetSeg button').forEach(b =>
+    b.setAttribute('aria-pressed', String(b.dataset.asset === form.asset)));
+  document.querySelectorAll('#modeSeg button').forEach(b =>
+    b.setAttribute('aria-pressed', String(b.dataset.mode === form.mode)));
+  $('#modeSeg').classList.toggle('hidden', form.asset === 'XMR');
+  const watching = form.asset === 'BTC' && form.mode === 'watch';
+  $('#wrapAddr').classList.toggle('hidden', !watching);
+  $('#wrapAmt').classList.toggle('hidden', watching);
+  $('#amtLabel').textContent = 'Amount in '+form.asset;
+  $('#fAmount').placeholder = form.asset === 'BTC' ? '0.0000' : '0.00';
+}
+document.querySelectorAll('#assetSeg button').forEach(b => b.onclick = () => {
+  form.asset = b.dataset.asset;
+  if(form.asset === 'XMR') form.mode = 'manual';
+  msg(''); syncForm();
+});
+document.querySelectorAll('#modeSeg button').forEach(b => b.onclick = () => {
+  form.mode = b.dataset.mode; msg(''); syncForm();
+});
+function msg(t, ok){ const el = $('#msg'); el.textContent = t || ''; el.className = 'msg'+(ok?' ok':''); }
+
+$('#addBtn').onclick = async () => {
+  const label = $('#fLabel').value.trim();
+  const watching = form.asset === 'BTC' && form.mode === 'watch';
+
+  if(watching){
+    const raw = $('#fAddr').value;
+    if(looksLikeSecret(raw)){
+      $('#fAddr').value = '';
+      return msg('That looks like a seed phrase or private key. This app only takes public addresses \u2014 nothing was saved. Clear your clipboard.');
+    }
+    if(isExtendedPub(raw)) return msg('That is an extended public key. Assay cannot derive addresses from one, and storing it would expose every address in that wallet, past and future. Paste individual addresses instead.');
+    const parsed = parseAddresses(raw);
+    if(!parsed.ok.length && !parsed.bad.length) return msg('Paste at least one address, starting bc1, 1 or 3.');
+    if(parsed.bad.length) return msg('Not a Bitcoin address: '+parsed.bad[0]+(parsed.bad.length>1 ? ' (and '+(parsed.bad.length-1)+' more)' : ''));
+    const existing = allAddresses();
+    const dupe = parsed.ok.find(a => existing.has(a));
+    if(dupe) return msg(shortAddr(dupe)+' is already on the ledger.');
+
+    state.holdings.push({
+      id:uid(), asset:'BTC', type:'watch',
+      label: label || (parsed.ok.length > 1 ? parsed.ok.length+' addresses' : shortAddr(parsed.ok[0])),
+      addresses: parsed.ok.map(a => ({ a:a, sats:null, txs:null, baseSats:null, baseTxs:null, pending:false, moved:false, err:null })),
+      checkedAt:null
+    });
+    $('#fAddr').value = ''; $('#fLabel').value = '';
+    msg('Added '+parsed.ok.length+' address'+(parsed.ok.length===1?'':'es')+'. Checking now \u2014 what they hold today becomes the baseline.', true);
+    await save(); render(); refresh();
+  }else{
+    const amount = parseFloat($('#fAmount').value.replace(/[, ]/g,''));
+    if(!isFinite(amount) || amount < 0) return msg('Enter an amount, like 0.0425.');
+    state.holdings.push({ id:uid(), asset:form.asset, type:'manual',
+      label: label || (form.asset+' balance'), amount:amount });
+    $('#fAmount').value = ''; $('#fLabel').value = '';
+    msg('Added. Tap it any time to change the amount.', true);
+    await save(); render();
+  }
+  setTimeout(() => { if($('#msg').classList.contains('ok')) msg(''); }, 7000);
+};
+['fLabel','fAmount'].forEach(id =>
+  $('#'+id).addEventListener('keydown', e => { if(e.key === 'Enter') $('#addBtn').click(); }));
+
+/* =====================================================================
+   DATA PANEL
+   ===================================================================== */
+function keepMsg(t, ok){ const el = $('#keepMsg'); el.textContent = t || ''; el.className = 'msg'+(ok?' ok':''); }
+
+$('#persistBtn').onclick = async () => {
+  const got = await askPersist();
+  renderWhere();
+  keepMsg(got
+    ? 'Done \u2014 this browser will no longer clear your ledger to reclaim space.'
+    : 'The browser said no. On iOS, add Assay to your home screen and try again; that usually settles it. A backup file is the sure fix.', got);
+};
+
+$('#exportBtn').onclick = () => {
+  const payload = { app:'assay', version:2, savedAt:new Date().toISOString(),
+    cur:state.cur, holdings:state.holdings };
+  const blob = new Blob([JSON.stringify(payload,null,2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'assay-backup-'+new Date().toISOString().slice(0,10)+'.json';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  keepMsg('Backup saved. It holds your amounts and watched addresses \u2014 no keys.', true);
+};
+
+$('#importBtn').onclick = () => $('#importFile').click();
+$('#importFile').onchange = async e => {
+  const file = e.target.files && e.target.files[0];
+  if(!file) return;
+  try{
+    let d = JSON.parse(await file.text());
+    if(d.app !== 'assay' || !Array.isArray(d.holdings)) throw new Error('shape');
+    d = migrate(d);
+    if(state.holdings.length && !confirm('Replace the '+state.holdings.length+' holding(s) on this device with the '+d.holdings.length+' in the backup?')) return;
+    state.holdings = d.holdings;
+    if(d.cur && SYM[d.cur]){ state.cur = d.cur; $('#cur').value = d.cur; }
+    await save(); render();
+    keepMsg('Restored '+d.holdings.length+' holding(s).', true);
+    refresh();
+  }catch(err){
+    keepMsg('That file is not an Assay backup. Nothing was changed.');
+  }finally{ e.target.value = ''; }
+};
+
+/* =====================================================================
+   INSTALL
+   ===================================================================== */
+let deferredPrompt = null;
+const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+
+function showInstallBar(){
+  if(standalone || state.installDismissed) return;
+  if(deferredPrompt){
+    $('#installBtn').classList.remove('hidden');
+    $('#installBar').classList.remove('hidden');
+  }else if(isIOS && location.protocol === 'https:'){
+    $('#installText').innerHTML = 'Add Assay to your home screen.<small>Tap Share, then \u201CAdd to Home Screen\u201D. It then opens full screen, works without a signal, and iOS stops clearing its storage.</small>';
+    $('#installBar').classList.remove('hidden');
+  }
+}
+addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredPrompt = e; showInstallBar(); });
+$('#installBtn').onclick = async () => {
+  if(!deferredPrompt) return;
+  deferredPrompt.prompt();
+  await deferredPrompt.userChoice;
+  deferredPrompt = null;
+  $('#installBar').classList.add('hidden');
+};
+$('#installX').onclick = async () => {
+  state.installDismissed = true;
+  $('#installBar').classList.add('hidden');
+  await save();
+};
+addEventListener('appinstalled', async () => {
+  $('#installBar').classList.add('hidden');
+  await askPersist();
+  renderWhere();
+});
+
+/* =====================================================================
+   CHROME + BOOT
+   ===================================================================== */
+$('#cur').onchange = async e => { state.cur = e.target.value; await save(); render(); };
+$('#maskBtn').onclick = async () => { state.masked = !state.masked; await save(); render(); };
+$('#refreshBtn').onclick = refresh;
+addEventListener('online', () => { offline = false; refresh(); });
+addEventListener('offline', () => { offline = true; render(); });
+document.addEventListener('visibilitychange', () => {
+  if(document.visibilityState === 'visible' && state.prices && Date.now()-state.prices.at > 120000) refresh();
+});
+
+if('serviceWorker' in navigator && location.protocol === 'https:'){
+  addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(function(){}));
+}
+
+(async function init(){
+  const saved = migrate(await store.get());
+  if(saved && Array.isArray(saved.holdings)) state = Object.assign(state, saved);
+  $('#cur').value = state.cur;
+  syncForm();
+  render();                 /* saved figures paint before any network call */
+  await checkPersist();
+  if(persisted === false && standalone) await askPersist();
+  renderWhere();
+  showInstallBar();
+  refresh();
+})();
+</script>
+</body>
+</html>
