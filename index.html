@@ -24,6 +24,7 @@
   --brass:#C8A75E; --brass-lo:#8A7238;
   --patina:#79A697; --patina-lo:#4C6E63;
   --oxide:#C15B45; --bone:#EAE6DC; --mute:#8A9199;
+  color-scheme:dark;
   --sans:'Archivo',system-ui,-apple-system,'Segoe UI',sans-serif;
   --mono:'IBM Plex Mono',ui-monospace,'SF Mono',Menlo,monospace;
 }
@@ -130,6 +131,38 @@ label.fld span{display:block;font-size:10.5px;letter-spacing:.14em;text-transfor
   color:var(--mute);margin-bottom:5px}
 label.fld em{font-style:normal;color:var(--mute);text-transform:none;letter-spacing:0;
   font-family:var(--sans);font-size:11.5px}
+.two{display:flex;gap:8px}
+.two>label.fld{flex:1;min-width:0}
+.inline{display:flex;gap:6px}
+.inline select{flex:0 0 auto;width:auto}
+.inline input{flex:1;min-width:0}
+select.picker{width:100%;padding:11px 10px;background:var(--ink);border:1px solid var(--rule);
+  border-radius:3px;color:var(--bone);font-family:var(--mono);font-size:15px;cursor:pointer}
+select.picker:focus{outline:2px solid var(--brass);outline-offset:1px;border-color:transparent}
+input[type=date]{width:100%;padding:10px 12px;background:var(--ink);border:1px solid var(--rule);
+  border-radius:3px;color:var(--bone);font-family:var(--mono);font-size:15px}
+input[type=date]:focus{outline:2px solid var(--brass);outline-offset:1px;border-color:transparent}
+.est-note{font-family:var(--mono);font-size:11px;color:var(--mute);margin-top:9px}
+.est-note b{color:var(--brass);font-weight:500}
+.tag.est{color:var(--brass-lo);border-color:var(--brass-lo)}
+.sched{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--ink);
+  border:1px solid var(--rule);border-radius:3px;margin-bottom:6px}
+.sched.off{opacity:.55}
+.sched.editing{border-color:var(--brass)}
+.sched-main{flex:1;min-width:0;cursor:pointer;background:none;border:0;color:inherit;
+  font:inherit;text-align:left;padding:0}
+.sched-main strong{display:block;font-family:var(--mono);font-size:12px;font-weight:500;
+  color:var(--bone);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sched-main small{display:block;font-family:var(--mono);font-size:10.5px;color:var(--mute);margin-top:2px}
+.sched-amt{font-family:var(--mono);font-size:12px;color:var(--brass);
+  font-variant-numeric:tabular-nums;flex:0 0 auto}
+.mini{background:none;border:1px solid var(--rule);border-radius:2px;color:var(--mute);
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;
+  padding:3px 6px;cursor:pointer;flex:0 0 auto}
+.mini:hover,.mini:focus-visible{color:var(--brass);border-color:var(--brass-lo)}
+.settle{border:1px solid var(--rule);border-radius:3px;padding:12px;margin-top:4px}
+.settle p{font-size:11.5px;line-height:1.55;color:var(--mute);margin-bottom:10px}
+.settle p b{color:var(--bone);font-weight:600}
 input[type=text],textarea{width:100%;padding:11px 12px;background:var(--ink);
   border:1px solid var(--rule);border-radius:3px;color:var(--bone);
   font-family:var(--mono);font-size:16px;resize:vertical}
@@ -240,6 +273,7 @@ input[type=text]:focus,textarea:focus{outline:2px solid var(--brass);outline-off
         <span class="b">₿&nbsp;<b id="btcTot">0</b></span>
         <span class="m">ɱ&nbsp;<b id="xmrTot">0</b></span>
       </div>
+      <p class="est-note hidden" id="estNote"></p>
     </div>
     <div class="split"><i class="sb" id="splitB" style="width:0"></i><i class="sm" id="splitM" style="width:0"></i></div>
     <div class="priceline"><span id="prices">Fetching prices…</span><span id="stamp"></span></div>
@@ -260,8 +294,9 @@ input[type=text]:focus,textarea:focus{outline:2px solid var(--brass);outline-off
       <button data-asset="XMR" aria-pressed="false">Monero</button>
     </div>
     <div class="seg pat" id="modeSeg">
-      <button data-mode="manual" aria-pressed="true">Type an amount</button>
-      <button data-mode="watch" aria-pressed="false">Watch addresses</button>
+      <button data-mode="manual" aria-pressed="true">Amount</button>
+      <button data-mode="watch" aria-pressed="false">Addresses</button>
+      <button data-mode="dca" aria-pressed="false">Repeat buy</button>
     </div>
     <label class="fld"><span>Label</span>
       <input type="text" id="fLabel" placeholder="Steel plate, phone wallet, exchange…" autocomplete="off">
@@ -273,6 +308,33 @@ input[type=text]:focus,textarea:focus{outline:2px solid var(--brass);outline-off
       <span>Public Bitcoin addresses <em>— one per line, they'll be summed</em></span>
       <textarea id="fAddr" placeholder="bc1&#8230;&#10;bc1&#8230;" autocomplete="off" spellcheck="false"></textarea>
     </label>
+    <div class="hidden" id="wrapDca">
+      <div class="two">
+        <label class="fld"><span>Each buy</span>
+          <div class="inline">
+            <select class="picker" id="fDcaCur" aria-label="Currency">
+              <option value="gbp">£</option><option value="usd">$</option><option value="eur">€</option>
+            </select>
+            <input type="text" id="fDcaAmt" inputmode="decimal" placeholder="10">
+          </div>
+        </label>
+        <label class="fld"><span>How often</span>
+          <select class="picker" id="fDcaFreq">
+            <option value="daily">Every day</option>
+            <option value="weekly">Every week</option>
+            <option value="monthly">Every month</option>
+          </select>
+        </label>
+      </div>
+      <div class="two">
+        <label class="fld"><span>First buy</span>
+          <input type="date" id="fDcaStart">
+        </label>
+        <label class="fld"><span>Fee % <em>optional</em></span>
+          <input type="text" id="fDcaFee" inputmode="decimal" placeholder="0">
+        </label>
+      </div>
+    </div>
     <button class="submit" id="addBtn">Add to ledger</button>
     <p class="msg" id="msg"></p>
   </section>
@@ -316,6 +378,50 @@ input[type=text]:focus,textarea:focus{outline:2px solid var(--brass);outline-off
       <label class="fld"><span>Add another address <em>— one per line</em></span>
         <textarea id="eAddrNew" placeholder="bc1&#8230;" autocomplete="off" spellcheck="false"></textarea>
       </label>
+    </div>
+    <div class="hidden" id="eDcaWrap">
+      <label class="fld" style="margin-bottom:6px"><span id="eSchedCount">Schedules</span></label>
+      <div id="eSchedList" style="margin-bottom:10px"></div>
+      <div class="settle" style="margin-bottom:12px">
+        <p id="eSchedFormTitle"><b>Add another schedule</b> — use this when the amount or
+          frequency changed, so the older buys keep their own price history.</p>
+        <div class="two">
+          <label class="fld"><span>Each buy</span>
+            <div class="inline">
+              <select class="picker" id="eDcaCur" aria-label="Currency">
+                <option value="gbp">£</option><option value="usd">$</option><option value="eur">€</option>
+              </select>
+              <input type="text" id="eDcaAmt" inputmode="decimal" placeholder="10">
+            </div>
+          </label>
+          <label class="fld"><span>How often</span>
+            <select class="picker" id="eDcaFreq">
+              <option value="daily">Every day</option>
+              <option value="weekly">Every week</option>
+              <option value="monthly">Every month</option>
+            </select>
+          </label>
+        </div>
+        <div class="two" style="margin-bottom:2px">
+          <label class="fld"><span>First buy</span>
+            <input type="date" id="eDcaStart">
+          </label>
+          <label class="fld"><span>Fee %</span>
+            <input type="text" id="eDcaFee" inputmode="decimal" placeholder="0">
+          </label>
+        </div>
+        <div class="ghosts">
+          <button class="ghost" id="eSchedSave">Add schedule</button>
+          <button class="ghost hidden" id="eSchedCancel">Cancel</button>
+        </div>
+      </div>
+      <div class="settle">
+        <p id="eSettleSummary"></p>
+        <label class="fld" style="margin-bottom:0">
+          <span>Correct it <em>— the real figure from your exchange</em></span>
+          <input type="text" id="eSettle" inputmode="decimal" placeholder="leave blank to keep the estimate">
+        </label>
+      </div>
     </div>
     <p class="msg" id="eMsg"></p>
     <div class="sheet-actions">
@@ -369,7 +475,7 @@ async function askPersist(){
 /* =====================================================================
    STATE
    ===================================================================== */
-let state = { v:2, cur:'gbp', holdings:[], masked:false, prices:null, installDismissed:false };
+let state = { v:4, cur:'gbp', holdings:[], masked:false, prices:null, history:{}, installDismissed:false };
 const SYM = { gbp:'\u00A3', usd:'$', eur:'\u20AC' };
 const $ = s => document.querySelector(s);
 let offline = !navigator.onLine;
@@ -391,10 +497,110 @@ function migrate(s){
       delete h.baseSats; delete h.baseTxs; delete h.pending; delete h.moved;
     }
     if(h.type === 'watch' && !Array.isArray(h.addresses)) h.addresses = [];
+    if(h.type === 'dca'){
+      if(h.settledCoins == null) h.settledCoins = 0;
+      if(!Array.isArray(h.schedules)){
+        /* v3 held one schedule inline; v4 holds a list of them. */
+        h.schedules = [{
+          id:(h.id+'-s0'), buy:h.buy, cur:h.cur, freq:h.freq, start:h.start,
+          feePct:(h.feePct == null ? 0 : h.feePct),
+          paused:!!h.paused, pausedAt:(h.pausedAt || null)
+        }];
+        delete h.buy; delete h.cur; delete h.freq; delete h.start;
+        delete h.feePct; delete h.paused; delete h.pausedAt;
+      }
+      h.schedules.forEach(sc => { if(sc.feePct == null) sc.feePct = 0; });
+    }
   });
-  s.v = 2;
+  if(!s.history) s.history = {};
+  s.v = 4;
   return s;
 }
+
+/* =====================================================================
+   REPEAT BUYS (DCA)
+   Each scheduled buy is converted at that day's closing price, so the
+   figure is an estimate built from real history — never a guess at
+   today's price applied backwards.
+   ===================================================================== */
+const isoOf = d => d.toISOString().slice(0,10);
+const todayISO = () => isoOf(new Date());
+
+function dcaDates(sc, settledTo, endISO){
+  if(!sc.start) return [];
+  const out = [];
+  const d = new Date(sc.start+'T00:00:00Z');
+  if(isNaN(d)) return [];
+  const dom = d.getUTCDate();
+  const today = new Date(endISO+'T00:00:00Z');
+  const stopped = (sc.paused && sc.pausedAt) ? new Date(sc.pausedAt+'T00:00:00Z') : null;
+  const cutoff = (stopped && stopped < today) ? stopped : today;
+  let guard = 0;
+  while(d <= cutoff && guard++ < 6000){
+    out.push(isoOf(d));
+    if(sc.freq === 'daily') d.setUTCDate(d.getUTCDate()+1);
+    else if(sc.freq === 'weekly') d.setUTCDate(d.getUTCDate()+7);
+    else{
+      d.setUTCDate(1);
+      d.setUTCMonth(d.getUTCMonth()+1);
+      const dim = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth()+1, 0)).getUTCDate();
+      d.setUTCDate(Math.min(dom, dim));
+    }
+  }
+  return settledTo ? out.filter(x => x > settledTo) : out;
+}
+
+/* price on a date, falling back up to 5 days back (weekends, API gaps) */
+function priceOn(hist, date){
+  if(hist[date]) return hist[date];
+  const d = new Date(date+'T00:00:00Z');
+  for(let i = 0; i < 5; i++){
+    d.setUTCDate(d.getUTCDate()-1);
+    const p = hist[isoOf(d)];
+    if(p) return p;
+  }
+  return null;
+}
+
+function accrueOne(asset, sc, settledTo){
+  const byCur = state.history[asset] || {};
+  const hist = Object.assign({}, byCur[sc.cur] || {});
+  const today = todayISO();
+  /* today rarely lands in the history feed yet — use the live price */
+  if(!hist[today] && state.prices){
+    const live = asset === 'BTC' ? state.prices.btc : state.prices.xmr;
+    if(live && live[sc.cur]) hist[today] = live[sc.cur];
+  }
+  const dates = dcaDates(sc, settledTo, today);
+  const net = (sc.buy || 0) * (1 - (sc.feePct || 0)/100);
+  let coins = 0, spent = 0, priced = 0, unpriced = 0;
+  dates.forEach(d => {
+    const px = priceOn(hist, d);
+    if(px && px > 0){ coins += net/px; spent += sc.buy; priced++; }
+    else unpriced++;
+  });
+  return { coins:coins, spent:spent, priced:priced, unpriced:unpriced, buys:dates.length };
+}
+
+function accrue(h){
+  const out = { coins:0, buys:0, unpriced:0, spentBy:{}, per:[] };
+  (h.schedules || []).forEach(sc => {
+    const r = accrueOne(h.asset, sc, h.settledTo);
+    out.coins += r.coins; out.buys += r.buys; out.unpriced += r.unpriced;
+    out.spentBy[sc.cur] = (out.spentBy[sc.cur] || 0) + r.spent;
+    out.per.push(r);
+  });
+  return out;
+}
+
+function spentText(spentBy){
+  return Object.keys(spentBy).map(c => money(spentBy[c], c)).join(' + ');
+}
+function schedText(sc){
+  return money(sc.buy, sc.cur)+' '+FREQ_WORD[sc.freq]+' since '+sc.start;
+}
+
+const FREQ_WORD = { daily:'daily', weekly:'weekly', monthly:'monthly' };
 
 /* =====================================================================
    FORMATTING
@@ -404,6 +610,14 @@ function coinFmt(n,dp){
   if(!isFinite(n)) return '0';
   const s = n.toFixed(dp).replace(/0+$/,'').replace(/\.$/,'');
   return (s === '' || s === '-0') ? '0' : s;
+}
+/* Fiat that reads naturally: £10, £12.50, £1,240 */
+function money(n, cur){
+  if(!isFinite(n)) n = 0;
+  return (SYM[cur] || '') + n.toLocaleString('en-GB',{
+    minimumFractionDigits: Number.isInteger(n) ? 0 : 2,
+    maximumFractionDigits: 2
+  });
 }
 const shortAddr = a => a.length > 20 ? a.slice(0,10)+'\u2026'+a.slice(-8) : a;
 function ago(ts){
@@ -469,6 +683,42 @@ async function fetchPrices(){
   return false;
 }
 
+/* Daily closing prices, cached on device. Only the missing tail is fetched. */
+async function fetchHistory(asset, cur){
+  const id = asset === 'BTC' ? 'bitcoin' : 'monero';
+  if(!state.history[asset]) state.history[asset] = {};
+  const have = state.history[asset][cur] || {};
+  const keys = Object.keys(have);
+
+  let earliest = null;
+  state.holdings.forEach(h => {
+    if(h.type !== 'dca' || h.asset !== asset) return;
+    (h.schedules || []).forEach(sc => {
+      if(sc.cur !== cur) return;
+      const from = h.settledTo || sc.start;
+      if(from && (!earliest || from < earliest)) earliest = from;
+    });
+  });
+  if(!earliest) return;
+
+  const span = Math.ceil((Date.now() - new Date(earliest+'T00:00:00Z').getTime())/86400000) + 2;
+  const covered = keys.length && keys.sort()[0] <= earliest;
+  const days = Math.min(covered ? 4 : span, 3650);
+
+  try{
+    const r = await fetch('https://api.coingecko.com/api/v3/coins/'+id+
+      '/market_chart?vs_currency='+cur+'&days='+days, {cache:'no-store'});
+    if(!r.ok) throw new Error(r.status);
+    const d = await r.json();
+    if(!Array.isArray(d.prices)) throw new Error('shape');
+    const merged = Object.assign({}, have);
+    d.prices.forEach(pt => { merged[isoOf(new Date(pt[0]))] = pt[1]; });
+    /* prune anything older than we need, to keep storage small */
+    Object.keys(merged).forEach(k => { if(k < earliest) delete merged[k]; });
+    state.history[asset][cur] = merged;
+  }catch(e){ /* keep whatever is cached */ }
+}
+
 async function fetchAddress(addr){
   const r = await fetch(MEMPOOL+'/address/'+encodeURIComponent(addr), {cache:'no-store'});
   if(r.status === 400) throw new Error('rejected as invalid');
@@ -504,8 +754,22 @@ async function refresh(){
     if(h.type === 'watch') h.addresses.forEach(a => watched.push([h,a]));
   });
 
+  const pairs = [];
+  state.holdings.forEach(h => {
+    if(h.type !== 'dca') return;
+    (h.schedules || []).forEach(sc => {
+      const k = h.asset+'|'+sc.cur;
+      if(pairs.indexOf(k) < 0) pairs.push(k);
+    });
+  });
+
   await Promise.all([
-    fetchPrices().then(ok => { offline = !ok; }),
+    fetchPrices()
+      .then(ok => { offline = !ok; })
+      .then(() => pool(pairs, 2, async k => {
+        const parts = k.split('|');
+        await fetchHistory(parts[0], parts[1]);
+      })),
     pool(watched, 3, async pair => {
       const h = pair[0], a = pair[1];
       try{
@@ -531,8 +795,12 @@ async function refresh(){
    ===================================================================== */
 function amountOf(h){
   if(h.type === 'manual') return h.amount || 0;
+  if(h.type === 'dca') return (h.settledCoins || 0) + accrue(h).coins;
   return h.addresses.reduce((s,a) => s + (a.sats == null ? 0 : a.sats/1e8), 0);
 }
+const estimatedIn = asset => state.holdings
+  .filter(h => h.type === 'dca' && h.asset === asset)
+  .reduce((s,h) => s + accrue(h).coins, 0);
 const hasMoved = h => h.type === 'watch' && h.addresses.some(a => a.moved);
 
 function render(){
@@ -562,6 +830,18 @@ function render(){
   $('#stamp').innerHTML = p
     ? (offline ? '<span class="warn">offline \u00B7 '+ago(p.at)+'</span>' : 'checked '+ago(p.at))
     : '';
+
+  const estB = estimatedIn('BTC'), estM = estimatedIn('XMR');
+  const note = $('#estNote');
+  if(estB > 0 || estM > 0){
+    const parts = [];
+    if(estB > 0) parts.push('\u007E\u20BF '+coinFmt(estB,8));
+    if(estM > 0) parts.push('\u007E\u0271 '+coinFmt(estM,6));
+    note.innerHTML = 'includes <b>'+parts.join(' and ')+'</b> estimated from repeat buys';
+    note.classList.remove('hidden');
+  }else{
+    note.classList.add('hidden');
+  }
 
   document.body.classList.toggle('masked', state.masked);
   $('#maskBtn').textContent = state.masked ? '\u25CC' : '\u25CD';
@@ -595,7 +875,19 @@ function render(){
         btn.setAttribute('aria-label','Edit '+h.label);
 
         let sub = '';
-        if(h.type === 'watch'){
+        if(h.type === 'dca'){
+          const acc = accrue(h);
+          const scheds = h.schedules || [];
+          const live = scheds.filter(sc => !sc.paused).length;
+          const bits = [];
+          if(scheds.length === 1) bits.push(schedText(scheds[0]));
+          else bits.push(scheds.length+' schedules'+(live < scheds.length ? ', '+live+' running' : ''));
+          bits.push(acc.buys+' buy'+(acc.buys===1?'':'s'));
+          if(acc.buys) bits.push(spentText(acc.spentBy)+' in');
+          if(acc.unpriced) bits.push(acc.unpriced+' not yet priced');
+          sub = bits.join(' \u00B7 ');
+        }
+        else if(h.type === 'watch'){
           const n = h.addresses.length;
           const nMoved = h.addresses.filter(a=>a.moved).length;
           const errs = h.addresses.filter(a=>a.err).length;
@@ -608,9 +900,10 @@ function render(){
 
         btn.innerHTML =
           '<div class="row-main"><div class="row-label">'+escapeHtml(h.label)+
-            (h.type==='watch' ? '<span class="tag">watched</span>' : '')+'</div>'+
+            (h.type==='watch' ? '<span class="tag">watched</span>' : '')+
+            (h.type==='dca' ? '<span class="tag est">est.</span>' : '')+'</div>'+
             (sub ? '<div class="row-sub'+(moved?' alert':'')+'">'+sub+'</div>' : '')+'</div>'+
-          '<div class="row-amt"><span class="a">'+coinFmt(amt,8)+'</span>'+
+          '<div class="row-amt"><span class="a">'+(h.type==='dca'?'\u007E':'')+coinFmt(amt,8)+'</span>'+
             (px ? '<span class="f">'+fiatFmt(amt*px,cur)+'</span>' : '')+'</div>'+
           '<span class="chev" aria-hidden="true">\u203A</span>';
         btn.onclick = () => openEdit(h.id);
@@ -665,15 +958,22 @@ function openEdit(id){
   if(!h) return;
   editId = id;
   draft = JSON.parse(JSON.stringify(h));   /* so Cancel really cancels */
-  $('#sheetTitle').textContent = draft.type === 'watch' ? 'Edit watched wallet' : 'Edit balance';
+  $('#sheetTitle').textContent = draft.type === 'watch' ? 'Edit watched wallet'
+    : draft.type === 'dca' ? 'Edit repeat buy' : 'Edit balance';
   $('#eLabel').value = draft.label;
   eMsg('');
   $('#eAddrNew').value = '';
-  const watching = draft.type === 'watch';
-  $('#eAmtWrap').classList.toggle('hidden', watching);
+  const watching = draft.type === 'watch', dca = draft.type === 'dca';
+  $('#eAmtWrap').classList.toggle('hidden', watching || dca);
   $('#eAddrWrap').classList.toggle('hidden', !watching);
+  $('#eDcaWrap').classList.toggle('hidden', !dca);
   if(watching){
     renderDraftAddrs();
+  }else if(dca){
+    schedEdit = -1;
+    clearSchedForm();
+    $('#eSettle').value = '';
+    renderScheds();
   }else{
     $('#eAmtLabel').textContent = 'Amount in '+draft.asset;
     $('#eAmount').value = coinFmt(draft.amount || 0, 12);
@@ -714,6 +1014,124 @@ function renderDraftAddrs(){
   }
 }
 
+let schedEdit = -1;
+
+function clearSchedForm(){
+  $('#eDcaCur').value = state.cur;
+  $('#eDcaAmt').value = '';
+  $('#eDcaFreq').value = 'daily';
+  $('#eDcaStart').value = todayISO();
+  $('#eDcaStart').max = todayISO();
+  $('#eDcaFee').value = '';
+  $('#eSchedSave').textContent = 'Add schedule';
+  $('#eSchedCancel').classList.add('hidden');
+  $('#eSchedFormTitle').innerHTML = '<b>Add another schedule</b> \u2014 use this when the amount or '+
+    'frequency changed, so the older buys keep their own price history.';
+}
+
+function loadSchedForm(i){
+  const sc = draft.schedules[i];
+  schedEdit = i;
+  $('#eDcaCur').value = sc.cur;
+  $('#eDcaAmt').value = sc.buy;
+  $('#eDcaFreq').value = sc.freq;
+  $('#eDcaStart').value = sc.start;
+  $('#eDcaFee').value = sc.feePct || 0;
+  $('#eSchedSave').textContent = 'Save schedule';
+  $('#eSchedCancel').classList.remove('hidden');
+  $('#eSchedFormTitle').innerHTML = '<b>Editing this schedule.</b> Correcting a typo is fine; if the '+
+    'amount actually changed on a date, stop this one and add a second instead.';
+  renderScheds();
+  $('#eDcaAmt').focus();
+}
+
+function renderScheds(){
+  if(!draft || draft.type !== 'dca') return;
+  const list = $('#eSchedList');
+  const scheds = draft.schedules || [];
+  list.innerHTML = '';
+  $('#eSchedCount').textContent = scheds.length +
+    (scheds.length === 1 ? ' schedule' : ' schedules \u2014 added together');
+
+  scheds.forEach((sc,i) => {
+    const r = accrueOne(draft.asset, sc, draft.settledTo);
+    const row = document.createElement('div');
+    row.className = 'sched'+(sc.paused?' off':'')+(schedEdit===i?' editing':'');
+    const note = [r.buys+' buy'+(r.buys===1?'':'s')];
+    if(r.buys) note.push(money(r.spent, sc.cur)+' in');
+    if(sc.paused) note.push('stopped '+(sc.pausedAt||''));
+    if(r.unpriced) note.push(r.unpriced+' not priced');
+    row.innerHTML =
+      '<button class="sched-main" type="button"><strong>'+escapeHtml(schedText(sc))+'</strong>'+
+        '<small>'+escapeHtml(note.join(' \u00B7 '))+'</small></button>'+
+      '<span class="sched-amt">\u007E'+coinFmt(r.coins,8)+'</span>'+
+      '<button class="mini" type="button">'+(sc.paused?'start':'stop')+'</button>'+
+      '<button class="addr-x" type="button" aria-label="Remove this schedule">&times;</button>';
+    const btns = row.querySelectorAll('button');
+    btns[0].onclick = () => loadSchedForm(i);
+    btns[1].onclick = () => {
+      sc.paused = !sc.paused;
+      sc.pausedAt = sc.paused ? todayISO() : null;
+      renderScheds();
+    };
+    btns[2].onclick = () => {
+      draft.schedules.splice(i,1);
+      if(schedEdit === i){ schedEdit = -1; clearSchedForm(); }
+      renderScheds();
+    };
+    list.appendChild(row);
+  });
+  if(!scheds.length){
+    list.innerHTML = '<p class="msg">No schedules left. Add one below, or remove the whole holding.</p>';
+  }
+  renderSettle();
+}
+
+function readSchedForm(){
+  const buy = parseFloat($('#eDcaAmt').value.replace(/[, ]/g,''));
+  if(!isFinite(buy) || buy <= 0) return { err:'Enter what each buy costs, like 10.' };
+  const start = $('#eDcaStart').value;
+  if(!start) return { err:'Set the date of the first buy.' };
+  if(start > todayISO()) return { err:'The first buy cannot be in the future.' };
+  const fee = parseFloat(($('#eDcaFee').value || '').replace(/[, %]/g,'')) || 0;
+  if(fee < 0 || fee >= 100) return { err:'A fee percentage has to be between 0 and 100.' };
+  return { sc:{ id:uid(), buy:buy, cur:$('#eDcaCur').value, freq:$('#eDcaFreq').value,
+    start:start, feePct:fee, paused:false, pausedAt:null } };
+}
+
+$('#eSchedSave').onclick = () => {
+  if(!draft) return;
+  const r = readSchedForm();
+  if(r.err) return eMsg(r.err);
+  if(schedEdit > -1){
+    const old = draft.schedules[schedEdit];
+    r.sc.id = old.id; r.sc.paused = old.paused; r.sc.pausedAt = old.pausedAt;
+    draft.schedules[schedEdit] = r.sc;
+    schedEdit = -1;
+  }else{
+    draft.schedules.push(r.sc);
+  }
+  clearSchedForm();
+  eMsg('');
+  renderScheds();
+};
+$('#eSchedCancel').onclick = () => { schedEdit = -1; clearSchedForm(); renderScheds(); };
+
+function renderSettle(){
+  if(!draft || draft.type !== 'dca') return;
+  const acc = accrue(draft);
+  const total = (draft.settledCoins || 0) + acc.coins;
+  let txt = '<b>'+acc.buys+' buy'+(acc.buys===1?'':'s')+'</b> counted'+
+    (acc.buys ? ', '+spentText(acc.spentBy)+' in' : '')+
+    ', estimated at <b>\u007E'+coinFmt(acc.coins,8)+' '+draft.asset+'</b>.';
+  if(draft.settledCoins) txt += ' On top of '+coinFmt(draft.settledCoins,8)+
+    ' already confirmed'+(draft.settledTo ? ' as of '+draft.settledTo : '')+', that is '+coinFmt(total,8)+'.';
+  if(acc.unpriced) txt += ' '+acc.unpriced+' buy(s) had no price to hand and were left out.';
+  txt += ' Fees and the exact time of day will make the real figure drift \u2014 put the true number in '+
+    'below whenever you check, and the estimate restarts from today.';
+  $('#eSettleSummary').innerHTML = txt;
+}
+
 function eMsg(t, ok){ const el = $('#eMsg'); el.textContent = t || ''; el.className = 'msg'+(ok?' ok':''); }
 
 $('#eSave').onclick = async () => {
@@ -742,6 +1160,16 @@ $('#eSave').onclick = async () => {
       }
     }
     if(!draft.addresses.length) return eMsg('A watched wallet needs at least one address.');
+  }else if(draft.type === 'dca'){
+    if(!draft.schedules.length) return eMsg('A repeat buy needs at least one schedule.');
+    if(schedEdit > -1) return eMsg('Finish editing that schedule first \u2014 save it or cancel.');
+    const settle = $('#eSettle').value.trim();
+    if(settle){
+      const c = parseFloat(settle.replace(/[, ]/g,''));
+      if(!isFinite(c) || c < 0) return eMsg('Enter the real amount you hold, like 0.0425.');
+      draft.settledCoins = c;
+      draft.settledTo = todayISO();
+    }
   }else{
     const amount = parseFloat($('#eAmount').value.replace(/[, ]/g,''));
     if(!isFinite(amount) || amount < 0) return eMsg('Enter an amount, like 0.0425.');
@@ -775,22 +1203,32 @@ addEventListener('keydown', e => { if(e.key === 'Escape' && editId) closeEdit();
    ===================================================================== */
 let form = { asset:'BTC', mode:'manual' };
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : String(Date.now())+Math.random());
+const findByLabel = (label, asset) => {
+  const key = (label || '').trim().toLowerCase();
+  if(!key) return null;
+  return state.holdings.find(h => h.asset === asset &&
+    (h.label || '').trim().toLowerCase() === key) || null;
+};
 
 function syncForm(){
   document.querySelectorAll('#assetSeg button').forEach(b =>
     b.setAttribute('aria-pressed', String(b.dataset.asset === form.asset)));
   document.querySelectorAll('#modeSeg button').forEach(b =>
     b.setAttribute('aria-pressed', String(b.dataset.mode === form.mode)));
-  $('#modeSeg').classList.toggle('hidden', form.asset === 'XMR');
+  document.querySelector('#modeSeg button[data-mode="watch"]').classList.toggle('hidden', form.asset === 'XMR');
   const watching = form.asset === 'BTC' && form.mode === 'watch';
+  const dca = form.mode === 'dca';
   $('#wrapAddr').classList.toggle('hidden', !watching);
-  $('#wrapAmt').classList.toggle('hidden', watching);
+  $('#wrapDca').classList.toggle('hidden', !dca);
+  $('#wrapAmt').classList.toggle('hidden', watching || dca);
   $('#amtLabel').textContent = 'Amount in '+form.asset;
   $('#fAmount').placeholder = form.asset === 'BTC' ? '0.0000' : '0.00';
+  if(!$('#fDcaStart').value) $('#fDcaStart').value = todayISO();
+  $('#fDcaStart').max = todayISO();
 }
 document.querySelectorAll('#assetSeg button').forEach(b => b.onclick = () => {
   form.asset = b.dataset.asset;
-  if(form.asset === 'XMR') form.mode = 'manual';
+  if(form.asset === 'XMR' && form.mode === 'watch') form.mode = 'manual';
   msg(''); syncForm();
 });
 document.querySelectorAll('#modeSeg button').forEach(b => b.onclick = () => {
@@ -825,6 +1263,55 @@ $('#addBtn').onclick = async () => {
     $('#fAddr').value = ''; $('#fLabel').value = '';
     msg('Added '+parsed.ok.length+' address'+(parsed.ok.length===1?'':'es')+'. Checking now \u2014 what they hold today becomes the baseline.', true);
     await save(); render(); refresh();
+  }else if(form.mode === 'dca'){
+    const buy = parseFloat($('#fDcaAmt').value.replace(/[, ]/g,''));
+    if(!isFinite(buy) || buy <= 0) return msg('Enter what each buy costs, like 10.');
+    const start = $('#fDcaStart').value;
+    if(!start) return msg('Set the date of the first buy.');
+    if(start > todayISO()) return msg('The first buy cannot be in the future.');
+    const fee = parseFloat(($('#fDcaFee').value || '').replace(/[, %]/g,'')) || 0;
+    if(fee < 0 || fee >= 100) return msg('A fee percentage has to be between 0 and 100.');
+    const cur = $('#fDcaCur').value, freq = $('#fDcaFreq').value;
+    const sched = { id:uid(), buy:buy, cur:cur, freq:freq, start:start, feePct:fee,
+      paused:false, pausedAt:null };
+
+    /* Same label, same coin? Fold it into what is already there. */
+    const twin = findByLabel(label, form.asset);
+    if(twin){
+      if(twin.type === 'watch'){
+        return msg('\u201C'+twin.label+'\u201D is a watched wallet \u2014 its balance already comes from the '+
+          'chain, so an estimate on top would count the same coins twice. Give this one its own label.');
+      }
+      if(twin.type === 'manual'){
+        const had = twin.amount || 0;
+        if(!confirm('\u201C'+twin.label+'\u201D holds '+coinFmt(had,8)+' '+twin.asset+
+          ' as a typed amount.\n\nAdd this repeat buy to it? That figure is treated as correct as of today, '+
+          'and buys from today onward are added on top. Anything bought before today is assumed to be in it already.')) return;
+        twin.type = 'dca';
+        twin.settledCoins = had;
+        twin.settledTo = todayISO();
+        twin.schedules = [sched];
+        delete twin.amount;
+        msg('Folded into \u201C'+twin.label+'\u201D. The '+coinFmt(had,8)+' you had typed is now the confirmed '+
+          'base, with buys from today counted on top.', true);
+      }else{
+        if(!confirm('Add this schedule to \u201C'+twin.label+'\u201D?\n\nIt will run alongside the '+
+          twin.schedules.length+' already there, and they are added together into one figure.')) return;
+        twin.schedules.push(sched);
+        msg('Added to \u201C'+twin.label+'\u201D \u2014 '+twin.schedules.length+' schedules now feed that row.', true);
+      }
+      $('#fDcaAmt').value = ''; $('#fLabel').value = '';
+      await save(); render(); refresh();
+      setTimeout(() => { if($('#msg').classList.contains('ok')) msg(''); }, 8000);
+      return;
+    }
+
+    state.holdings.push({ id:uid(), asset:form.asset, type:'dca',
+      label: label || (money(buy, cur)+' '+FREQ_WORD[freq]),
+      schedules:[sched], settledCoins:0, settledTo:null });
+    $('#fDcaAmt').value = ''; $('#fLabel').value = '';
+    msg('Added. Every buy is valued at that day\u2019s price \u2014 tap the row to correct it against your exchange whenever you check.', true);
+    await save(); render(); refresh();
   }else{
     const amount = parseFloat($('#fAmount').value.replace(/[, ]/g,''));
     if(!isFinite(amount) || amount < 0) return msg('Enter an amount, like 0.0425.');
@@ -853,7 +1340,7 @@ $('#persistBtn').onclick = async () => {
 };
 
 $('#exportBtn').onclick = () => {
-  const payload = { app:'assay', version:2, savedAt:new Date().toISOString(),
+  const payload = { app:'assay', version:4, savedAt:new Date().toISOString(),
     cur:state.cur, holdings:state.holdings };
   const blob = new Blob([JSON.stringify(payload,null,2)], {type:'application/json'});
   const a = document.createElement('a');
