@@ -657,7 +657,7 @@ input[type=text]:focus,textarea:focus{outline:2px solid var(--brass);outline-off
 /* =====================================================================
    STORAGE — device-local, survives refresh, close and reboot.
    ===================================================================== */
-const SHELL_TAG = 'v25';
+const SHELL_TAG = 'v26';
 const KEY = 'assay:v1';
 const store = (() => {
   try{
@@ -1133,22 +1133,42 @@ const allAddresses = () => new Set(
    ===================================================================== */
 const MEMPOOL = 'https://mempool.space/api';
 
-async function fetchPrices(){
+/* Fold new figures over the old rather than replacing the table. The
+   mempool fallback only knows GBP/USD/EUR, and replacing wholesale wiped
+   the gold, silver and sats rates \u2014 which then vanished from the picker,
+   since it only offers units it has a price for. */
+function mergePrices(next, partial){
+  const prev = state.prices || {};
+  state.prices = {
+    btc: Object.assign({}, prev.btc || {}, next.btc || {}),
+    xmr: Object.assign({}, prev.xmr || {}, next.xmr || {}),
+    at: Date.now(),
+    partial: !!partial
+  };
+  deriveMonths();
+}
+
+let lastPriceFetch = 0;
+async function fetchPrices(force){
+  /* CoinGecko's free tier is easily tripped: a refresh can already mean a
+     price call, a changes call and a history call. Don't add to it. */
+  if(!force && state.prices && Date.now() - lastPriceFetch < 45000) return true;
   try{
     const r = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,monero&vs_currencies=gbp,usd,eur,xau,xag,sats&include_24hr_change=true',{cache:'no-store'});
+    if(r.status === 429) throw new Error('rate limited');
     if(!r.ok) throw new Error(r.status);
     const d = await r.json();
     if(!d.bitcoin || !d.monero) throw new Error('incomplete');
-    state.prices = { btc:d.bitcoin, xmr:d.monero, at:Date.now(), partial:false };
-    deriveMonths();
+    mergePrices({ btc:d.bitcoin, xmr:d.monero }, false);
+    lastPriceFetch = Date.now();
     return true;
   }catch(e){}
   try{
     const r = await fetch(MEMPOOL+'/v1/prices',{cache:'no-store'});
     if(!r.ok) throw new Error(r.status);
     const d = await r.json();
-    const prev = state.prices;
-    state.prices = { btc:{gbp:d.GBP,usd:d.USD,eur:d.EUR}, xmr:prev?prev.xmr:null, at:Date.now(), partial:true };
+    mergePrices({ btc:{gbp:d.GBP,usd:d.USD,eur:d.EUR} }, true);
+    lastPriceFetch = Date.now();
     return true;
   }catch(e){}
   return false;
@@ -1248,7 +1268,7 @@ async function pool(items, n, fn){
 }
 
 let busy = false;
-async function refresh(){
+async function refresh(force){
   if(busy) return;
   busy = true;
   $('#refreshBtn').setAttribute('aria-busy','true');
@@ -1267,7 +1287,7 @@ async function refresh(){
   });
 
   await Promise.all([
-    fetchPrices()
+    fetchPrices(force)
       .then(ok => { offline = !ok; })
       .then(() => {
         const wanted = [changeCur()];
@@ -1591,6 +1611,7 @@ function renderUnits(cur){
   const opts = ['<option value="">'+state.cur.toUpperCase()+'</option>'].concat(
     UNIT_LIST.filter(d => d.u === 'months' || unitReady(d.u))
       .map(d => '<option value="'+d.u+'">'+d.label+'</option>'));
+  if(opts.length === 1) opts.push('<option value="" disabled>no other prices yet</option>');
   sel.innerHTML = opts.join('');
   sel.value = (state.unit && unitReady(state.unit)) ? state.unit : '';
 }
@@ -2509,7 +2530,7 @@ $('#spendClear').onclick = async () => {
   $('#spendMsg').textContent = 'Cleared.';
 };
 $('#maskBtn').onclick = async () => { state.masked = !state.masked; await save(); render(); };
-$('#refreshBtn').onclick = refresh;
+$('#refreshBtn').onclick = () => refresh(true);
 addEventListener('online', () => { offline = false; refresh(); });
 addEventListener('offline', () => { offline = true; render(); });
 document.addEventListener('visibilitychange', () => {
