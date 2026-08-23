@@ -68,6 +68,8 @@ body.locked{overflow:hidden}
 #screenBack{font-size:24px;line-height:0.8;padding-bottom:4px}
 .row.nav .row-label{font-weight:400}
 .row.nav .row-sub{font-family:var(--sans);font-size:12px;white-space:normal}
+.row[aria-pressed="true"]{border-left-color:var(--brass)}
+.row[aria-pressed="true"] .row-label::after{content:" \u2713";color:var(--brass)}
 .toast{margin:0 0 16px;padding:11px 13px;border:1px solid var(--patina-lo);border-radius:3px;
   background:#161E1B;color:var(--patina);font-size:12.5px;line-height:1.45;
   animation:rise .2s ease}
@@ -84,7 +86,7 @@ body.locked{overflow:hidden}
 .eyebrow{font-size:10.5px;letter-spacing:.22em;text-transform:uppercase;color:var(--mute);
   display:flex;justify-content:space-between;align-items:center;gap:10px}
 .cur-select{background:none;border:1px solid var(--rule);border-radius:3px;color:var(--brass);
-  font-family:var(--mono);font-size:11px;letter-spacing:.1em;padding:3px 6px;cursor:pointer}
+  font-family:var(--mono);font-size:11px;letter-spacing:.1em;padding:4px 6px;cursor:pointer}
 .fiat{font-family:var(--mono);font-weight:500;font-size:clamp(34px,10vw,46px);
   line-height:1.05;letter-spacing:-.02em;margin:12px 0 2px;font-variant-numeric:tabular-nums;
   cursor:pointer;user-select:none;-webkit-user-select:none}
@@ -109,6 +111,7 @@ body.locked{overflow:hidden}
 .split i{display:block;height:100%;transition:width .5s ease}
 .split .sb{background:var(--brass)}
 .split .sm{background:var(--patina)}
+.split .sc{background:var(--mute)}
 .priceline{padding:9px 20px;font-family:var(--mono);font-size:11px;color:var(--mute);
   border-top:1px solid var(--rule);display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
 .priceline .warn{color:var(--oxide)}
@@ -127,6 +130,8 @@ body.locked{overflow:hidden}
 .chip.flat,.chg.flat .dir{color:var(--mute)}
 .btc h2{color:var(--brass)}
 .xmr h2{color:var(--patina)}
+.cash h2{color:var(--mute)}
+.cash .row{border-left-color:var(--mute)}
 
 .row{display:flex;align-items:center;gap:12px;width:100%;text-align:left;
   padding:13px 14px;background:var(--panel);color:inherit;font:inherit;
@@ -322,11 +327,7 @@ input[type=text]:focus,textarea:focus{outline:2px solid var(--brass);outline-off
     <div class="total">
       <div class="eyebrow">
         <span>Total held <em id="unitHint">in GBP</em></span>
-        <select class="cur-select" id="cur" aria-label="Priced in">
-          <option value="gbp">GBP</option><option value="usd">USD</option>
-          <option value="eur">EUR</option><option value="xau">GOLD</option>
-          <option value="xag">SILVER</option><option value="months">MONTHS</option>
-        </select>
+        <select class="cur-select" id="cur" aria-label="Priced in"></select>
       </div>
       <div class="fiat" id="fiat" role="button" tabindex="0"
         aria-label="Total held. Tap to switch between cash and gold.">£0.00</div>
@@ -337,7 +338,7 @@ input[type=text]:focus,textarea:focus{outline:2px solid var(--brass);outline-off
       </div>
       <p class="est-note hidden" id="estNote"></p>
     </div>
-    <div class="split"><i class="sb" id="splitB" style="width:0"></i><i class="sm" id="splitM" style="width:0"></i></div>
+    <div class="split"><i class="sb" id="splitB" style="width:0"></i><i class="sm" id="splitM" style="width:0"></i><i class="sc" id="splitC" style="width:0"></i></div>
     <div class="priceline"><span id="prices">Fetching prices…</span><span id="stamp"></span></div>
   </section>
 
@@ -371,6 +372,12 @@ input[type=text]:focus,textarea:focus{outline:2px solid var(--brass);outline-off
           <div class="row-sub">An amount, watched addresses, or a repeat buy</div>
         </div><span class="chev" aria-hidden="true">›</span>
       </button>
+      <button class="row nav" type="button" data-go="cur">
+        <div class="row-main">
+          <div class="row-label">Currency</div>
+          <div class="row-sub" id="curSummary">GBP</div>
+        </div><span class="chev" aria-hidden="true">\u203A</span>
+      </button>
       <button class="row nav" type="button" data-go="spend">
         <div class="row-main">
           <div class="row-label">Living costs</div>
@@ -402,6 +409,7 @@ input[type=text]:focus,textarea:focus{outline:2px solid var(--brass);outline-off
     <div class="seg" id="assetSeg">
       <button data-asset="BTC" aria-pressed="true">Bitcoin</button>
       <button data-asset="XMR" aria-pressed="false">Monero</button>
+      <button data-asset="CASH" aria-pressed="false">Cash</button>
     </div>
     <div class="seg pat" id="modeSeg">
       <button data-mode="manual" aria-pressed="true">Amount</button>
@@ -449,8 +457,45 @@ input[type=text]:focus,textarea:focus{outline:2px solid var(--brass);outline-off
         </label>
       </div>
     </div>
+    <div class="hidden" id="wrapCash">
+      <label class="fld"><span>Balance</span>
+        <div class="inline">
+          <select class="picker" id="fCashCur" aria-label="Currency">
+            <option value="gbp">£</option><option value="usd">$</option><option value="eur">€</option>
+          </select>
+          <input type="text" id="fCashAmt" inputmode="decimal" placeholder="5000" autocomplete="off">
+        </div>
+      </label>
+      <div class="two">
+        <label class="fld"><span>Held since <em>optional</em></span>
+          <input type="date" id="fCashSince">
+        </label>
+        <label class="fld"><span>Interest % <em>optional</em></span>
+          <input type="text" id="fCashRate" inputmode="decimal" placeholder="4.5">
+        </label>
+      </div>
+      <p class="conv">A date lets Assay show what buying Bitcoin instead would have done.
+        The rate is used to work out what the balance grew from, so the comparison is fair to
+        the cash.</p>
+    </div>
     <button class="submit" id="addBtn">Add to ledger</button>
     <p class="msg" id="msg"></p>
+    </div>
+
+    <div id="panelCur" class="hidden">
+      <p class="notes" style="margin-bottom:14px">What Assay counts in. Gold, silver, sats and
+        months are all worked out from this, and it is the default for new holdings.</p>
+      <div id="curList">
+        <button class="row" type="button" data-cur="gbp">
+          <div class="row-main"><div class="row-label">GBP</div>
+          <div class="row-sub">Pound sterling</div></div></button>
+        <button class="row" type="button" data-cur="usd">
+          <div class="row-main"><div class="row-label">USD</div>
+          <div class="row-sub">US dollar</div></div></button>
+        <button class="row" type="button" data-cur="eur">
+          <div class="row-main"><div class="row-label">EUR</div>
+          <div class="row-sub">Euro</div></div></button>
+      </div>
     </div>
 
     <div id="panelSpend" class="hidden">
@@ -536,6 +581,26 @@ input[type=text]:focus,textarea:focus{outline:2px solid var(--brass);outline-off
         <textarea id="eAddrNew" placeholder="bc1&#8230;" autocomplete="off" spellcheck="false"></textarea>
       </label>
     </div>
+    <div class="hidden" id="eCashWrap">
+      <label class="fld"><span>Balance</span>
+        <div class="inline">
+          <select class="picker" id="eCashCur" aria-label="Currency">
+            <option value="gbp">£</option><option value="usd">$</option><option value="eur">€</option>
+          </select>
+          <input type="text" id="eCashAmt" inputmode="decimal">
+        </div>
+      </label>
+      <div class="two">
+        <label class="fld"><span>Held since</span>
+          <input type="date" id="eCashSince">
+        </label>
+        <label class="fld"><span>Interest %</span>
+          <input type="text" id="eCashRate" inputmode="decimal">
+        </label>
+      </div>
+      <div class="settle"><p id="eCashOpp"></p></div>
+    </div>
+
     <div class="hidden" id="eDcaWrap">
       <label class="fld" style="margin-bottom:6px"><span id="eSchedCount">Schedules</span></label>
       <div id="eSchedList" style="margin-bottom:10px"></div>
@@ -592,7 +657,7 @@ input[type=text]:focus,textarea:focus{outline:2px solid var(--brass);outline-off
 /* =====================================================================
    STORAGE — device-local, survives refresh, close and reboot.
    ===================================================================== */
-const SHELL_TAG = 'v21';
+const SHELL_TAG = 'v25';
 const KEY = 'assay:v1';
 const store = (() => {
   try{
@@ -637,7 +702,11 @@ let state = { v:4, cur:'gbp', unit:'', spend:null, period:'24h', holdings:[], ma
   prices:null, changes:{}, history:{}, installDismissed:false };
 const SYM = { gbp:'\u00A3', usd:'$', eur:'\u20AC', xau:'', xag:'', months:'' };
 const METALS = { xau:'gold', xag:'silver' };
-const UNIT_NAME = { xau:'gold', xag:'silver', months:'months of costs' };
+const UNIT_NAME = { xau:'gold', xag:'silver', months:'months of costs', sats:'sats' };
+const FIATS = ['gbp','usd','eur'];
+const UNITS = ['xau','xag','sats','months'];   /* everything that is not a currency */
+const isUnit = v => UNITS.indexOf(v) > -1;
+const isFiat = v => FIATS.indexOf(v) > -1;
 const PERIODS = ['24h','7d','30d','1y'];
 const PERIOD_WORD = { '24h':'today', '7d':'this week', '30d':'this month', '1y':'this year' };
 const OZ_G = 31.1034768;   /* one troy ounce, in grams */
@@ -680,6 +749,11 @@ function migrate(s){
   if(!s.changes) s.changes = {};
   if(!s.period) s.period = '24h';
   if(s.gold && !s.unit) s.unit = 'xau';   /* v4 had a gold on/off flag */
+  /* A unit could once leak into the currency slot; put it back where it goes. */
+  if(s.cur && FIATS.indexOf(s.cur) < 0){
+    if(UNITS.indexOf(s.cur) > -1 && !s.unit) s.unit = s.cur;
+    s.cur = 'gbp';
+  }
   delete s.gold;
   s.v = 4;
   return s;
@@ -797,6 +871,7 @@ function monthsParts(n){
 function unitParts(n, cur){
   if(METALS[cur]) return goldParts(n);
   if(cur === 'months') return monthsParts(n);
+  if(cur === 'sats') return { v:Math.round(n), dp:0, unit:'sats' };
   return null;
 }
 function fiatFmt(n, cur){
@@ -862,8 +937,68 @@ function escapeHtml(s){
 function priceOf(asset, cur){
   const p = state.prices;
   if(!p) return null;
+  if(asset === 'CASH') return null;      /* cash uses fiatRate instead */
   const src = asset === 'BTC' ? p.btc : p.xmr;
   return (src && src[cur] != null) ? src[cur] : null;
+}
+
+/* One unit of `from` expressed in `to`. Bitcoin is priced in every unit we
+   support, so it doubles as the bridge \u2014 no extra endpoint needed. */
+function fiatRate(from, to){
+  if(from === to) return 1;
+  const p = state.prices;
+  if(!p || !p.btc) return null;
+  const a = p.btc[to], b = p.btc[from];
+  return (a != null && b != null && b !== 0) ? a/b : null;
+}
+
+/* What a holding is worth, in the unit on screen. */
+function valueOf(h, cur){
+  if(h.type === 'cash'){
+    const r = fiatRate(h.cur, cur);
+    return r == null ? null : cashNow(h)*r;
+  }
+  const px = priceOf(h.asset, cur);
+  return px == null ? null : amountOf(h)*px;
+}
+
+/* What buying Bitcoin instead would have done. Uses the daily history
+   already fetched for repeat buys, and compares against the balance the
+   cash actually grew from \u2014 not the figure today \u2014 so interest counts. */
+function opportunity(h){
+  if(!h.since) return null;
+  const hist = ((state.history.BTC || {})[h.cur]) || {};
+  const then = priceOn(hist, h.since);
+  const now = priceOf('BTC', h.cur);
+  if(!then || !now) return null;
+  const start = cashStart(h);
+  const coins = start/then;
+  const wouldBe = coins*now;
+  const held = cashNow(h);
+  return {
+    coins:coins, wouldBe:wouldBe, held:held, start:start,
+    gap:held - wouldBe,
+    pct:wouldBe > 0 ? (held - wouldBe)/wouldBe*100 : null
+  };
+}
+
+/* Interest, if a rate was given, compounded from the date it was set. */
+function yearsSince(iso){
+  if(!iso) return 0;
+  const t = new Date(iso+'T00:00:00Z').getTime();
+  if(isNaN(t)) return 0;
+  return Math.max(0, (Date.now()-t)/(365.2425*86400000));
+}
+function cashNow(h){
+  const base = h.amount || 0;
+  if(!h.rate || !h.since) return base;
+  return base;                      /* the stored figure is the balance today */
+}
+function cashStart(h){
+  /* balance when it was set, backed out of today's figure and the rate */
+  const base = h.amount || 0;
+  if(!h.rate || !h.since) return base;
+  return base/Math.pow(1 + h.rate/100, yearsSince(h.since));
 }
 
 function coinsFrom(raw, unit, asset){
@@ -1000,7 +1135,7 @@ const MEMPOOL = 'https://mempool.space/api';
 
 async function fetchPrices(){
   try{
-    const r = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,monero&vs_currencies=gbp,usd,eur,xau,xag&include_24hr_change=true',{cache:'no-store'});
+    const r = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,monero&vs_currencies=gbp,usd,eur,xau,xag,sats&include_24hr_change=true',{cache:'no-store'});
     if(!r.ok) throw new Error(r.status);
     const d = await r.json();
     if(!d.bitcoin || !d.monero) throw new Error('incomplete');
@@ -1027,12 +1162,12 @@ async function fetchHistory(asset, cur){
   const keys = Object.keys(have);
 
   let earliest = null;
+  const note = from => { if(from && (!earliest || from < earliest)) earliest = from; };
   state.holdings.forEach(h => {
+    if(h.type === 'cash' && asset === 'BTC' && h.cur === cur){ note(h.since); return; }
     if(h.type !== 'dca' || h.asset !== asset) return;
     (h.schedules || []).forEach(sc => {
-      if(sc.cur !== cur) return;
-      const from = h.settledTo || sc.start;
-      if(from && (!earliest || from < earliest)) earliest = from;
+      if(sc.cur !== cur) note(null); else note(h.settledTo || sc.start);
     });
   });
   /* every schedule still in the future: nothing to price yet */
@@ -1124,18 +1259,23 @@ async function refresh(){
   });
 
   const pairs = [];
+  const want = k => { if(pairs.indexOf(k) < 0) pairs.push(k); };
   state.holdings.forEach(h => {
+    if(h.type === 'cash'){ if(h.since) want('BTC|'+h.cur); return; }
     if(h.type !== 'dca') return;
-    (h.schedules || []).forEach(sc => {
-      const k = h.asset+'|'+sc.cur;
-      if(pairs.indexOf(k) < 0) pairs.push(k);
-    });
+    (h.schedules || []).forEach(sc => want(h.asset+'|'+sc.cur));
   });
 
   await Promise.all([
     fetchPrices()
       .then(ok => { offline = !ok; })
-      .then(() => fetchChanges(changeCur()))
+      .then(() => {
+        const wanted = [changeCur()];
+        state.holdings.forEach(h => {
+          if(h.type === 'cash' && wanted.indexOf(h.cur) < 0) wanted.push(h.cur);
+        });
+        return pool(wanted, 2, c => fetchChanges(c));
+      })
       .then(() => pool(pairs, 2, async k => {
         const parts = k.split('|');
         await fetchHistory(parts[0], parts[1]);
@@ -1176,8 +1316,34 @@ const hasMoved = h => h.type === 'watch' && h.addresses.some(a => a.moved);
 /* Value what you hold now at today's price and at the price 24h ago.
    The coin amounts are identical in both, so buying more cannot move this
    figure — only the market can. */
+/* Cash does not move; the unit around it does. Priced in u, a balance held
+   in c changes by (1+btc's move in u)/(1+btc's move in c) - 1. In sats that
+   is simply the inverse of Bitcoin's move, which is the whole question. */
+function cashChange(cashCur, cur, period){
+  if(cashCur === cur) return 0;
+  const inUnit = assetChange('BTC', cur, period);
+  const inCash = assetChange('BTC', cashCur, period);
+  if(inUnit == null || inCash == null) return null;
+  const f = (1 + inUnit/100)/(1 + inCash/100);
+  return isFinite(f) ? (f - 1)*100 : null;
+}
+
 function assetChange(asset, cur, period){
   period = period || state.period || '24h';
+  if(asset === 'CASH'){
+    const rows = state.holdings.filter(h => h.type === 'cash');
+    if(!rows.length) return null;
+    /* value-weighted, so mixed currencies still give one honest figure */
+    let now = 0, then = 0;
+    for(const h of rows){
+      const v = valueOf(h, cur);
+      const c = cashChange(h.cur, cur, period);
+      if(v == null || c == null) return null;
+      now += v;
+      then += v/(1 + c/100);
+    }
+    return then > 0 ? (now - then)/then*100 : null;
+  }
   /* months is a constant divisor, so its move is the underlying cash move */
   const cc = cur === 'months' ? (state.spend ? state.spend.cur : state.cur) : cur;
   const k = asset === 'BTC' ? 'btc' : 'xmr';
@@ -1190,7 +1356,7 @@ function assetChange(asset, cur, period){
   return (v == null || !isFinite(v) || v <= -100) ? null : v;
 }
 
-function priceChange(cur, btcAmt, xmrAmt, btcPx, xmrPx){
+function priceChange(cur, btcAmt, xmrAmt, btcPx, xmrPx, cashVal){
   if(!state.prices) return null;
   let then = 0, now = 0;
   const leg = (asset, amt, px) => {
@@ -1203,6 +1369,12 @@ function priceChange(cur, btcAmt, xmrAmt, btcPx, xmrPx){
   };
   if(!leg('BTC', btcAmt, btcPx)) return null;
   if(!leg('XMR', xmrAmt, xmrPx)) return null;
+  if(cashVal > 0){
+    const chg = assetChange('CASH', cur);
+    if(chg == null) return null;
+    then += cashVal/(1 + chg/100);
+    now  += cashVal;
+  }
   if(then <= 0) return null;
   return { pct:(now-then)/then*100, abs:now-then };
 }
@@ -1221,19 +1393,25 @@ function render(){
   const xmrPx = p && p.xmr ? p.xmr[cur] : null;
   const btcVal = btcPx ? btcAmt*btcPx : 0;
   const xmrVal = xmrPx ? xmrAmt*xmrPx : 0;
+  const cashVal = state.holdings.filter(h => h.type === 'cash')
+    .reduce((sum,h) => sum + (valueOf(h,cur) || 0), 0);
 
-  $('#fiat').innerHTML = bigValue(btcVal+xmrVal, cur);
-  $('#cur').value = cur === 'xau' ? 'xau' : state.cur;
+  $('#fiat').innerHTML = bigValue(btcVal+xmrVal+cashVal, cur);
   $('#unitHint').textContent = UNIT_NAME[cur] ? 'in '+UNIT_NAME[cur] : 'in '+cur.toUpperCase();
+  renderUnits(cur);
+  $('#curSummary').textContent = state.cur.toUpperCase();
+  document.querySelectorAll('#curList button').forEach(b =>
+    b.setAttribute('aria-pressed', String(b.dataset.cur === state.cur)));
   $('#spendSummary').textContent = state.spend
     ? money(state.spend.amount, state.spend.cur)+' a month'
     : 'Set this to price your stack in months';
   $('#btcTot').textContent = coinFmt(btcAmt,8);
   $('#xmrTot').textContent = coinFmt(xmrAmt,6);
 
-  const tot = btcVal+xmrVal;
+  const tot = btcVal+xmrVal+cashVal;
   $('#splitB').style.width = (tot>0 ? btcVal/tot*100 : 0)+'%';
   $('#splitM').style.width = (tot>0 ? xmrVal/tot*100 : 0)+'%';
+  $('#splitC').style.width = (tot>0 ? cashVal/tot*100 : 0)+'%';
 
   const bits = [];
   if(btcPx) bits.push('\u20BF '+fiatFmt(btcPx,cur));
@@ -1250,7 +1428,7 @@ function render(){
     ? (offline ? '<span class="warn">offline \u00B7 '+ago(p.at)+'</span>' : 'checked '+ago(p.at))
     : '';
 
-  const chg = priceChange(cur, btcAmt, xmrAmt, btcPx, xmrPx);
+  const chg = priceChange(cur, btcAmt, xmrAmt, btcPx, xmrPx, cashVal);
   const per = PERIOD_WORD[state.period] || state.period;
   const chgEl = $('#chg');
   const periodBtn = '<button class="per" type="button" id="periodBtn" title="change '+per+
@@ -1298,33 +1476,59 @@ function render(){
       '<br><button type="button" id="emptyAdd">Add a holding</button></p></div></div>';
     $('#emptyAdd').onclick = () => goto('add');
   } else {
-    ['BTC','XMR'].forEach(asset => {
-      const rows = state.holdings.filter(h => h.asset === asset);
+    ['BTC','XMR','CASH'].forEach(asset => {
+      const rows = asset === 'CASH'
+        ? state.holdings.filter(h => h.type === 'cash')
+        : state.holdings.filter(h => h.asset === asset && h.type !== 'cash');
       if(!rows.length) return;
-      const px = asset==='BTC' ? btcPx : xmrPx;
-      const sum = asset==='BTC' ? btcAmt : xmrAmt;
+      const px = asset==='BTC' ? btcPx : asset==='XMR' ? xmrPx : null;
+      const sum = asset==='BTC' ? btcAmt : asset==='XMR' ? xmrAmt : 0;
 
       const sec = document.createElement('section');
-      sec.className = 'group '+(asset==='BTC'?'btc':'xmr');
+      sec.className = 'group '+(asset==='BTC'?'btc':asset==='XMR'?'xmr':'cash');
       const head = document.createElement('div');
       head.className = 'group-head';
       const ac = assetChange(asset, cur);
-      head.innerHTML = '<h2>'+(asset==='BTC'?'Bitcoin':'Monero')+'</h2>' +
+      let totText;
+      if(asset === 'CASH'){
+        const curs = {};
+        rows.forEach(h => { curs[h.cur] = (curs[h.cur]||0) + cashNow(h); });
+        const native = Object.keys(curs).map(c => money(curs[c], c)).join(' + ');
+        const shown = fiatFmt(cashVal, cur);
+        totText = (native === shown ? shown : native+' \u00B7 '+shown);
+      }else{
+        totText = (asset==='BTC'?'\u20BF ':'\u0271 ')+coinFmt(sum,8)+
+          (px ? ' \u00B7 '+fiatFmt(sum*px,cur) : '');
+      }
+      head.innerHTML = '<h2>'+(asset==='BTC'?'Bitcoin':asset==='XMR'?'Monero':'Cash')+'</h2>' +
         (ac == null ? '' : chip(ac, 1)) +
-        '<span class="tot">'+(asset==='BTC'?'\u20BF ':'\u0271 ')+coinFmt(sum,8)+
-        (px ? ' \u00B7 '+fiatFmt(sum*px,cur) : '')+'</span>';
+        '<span class="tot">'+totText+'</span>';
       sec.appendChild(head);
 
       rows.forEach(h => {
-        const amt = amountOf(h);
+        const amt = h.type === 'cash' ? cashNow(h) : amountOf(h);
         const moved = hasMoved(h);
+        const val = valueOf(h, cur);
         const btn = document.createElement('button');
         btn.className = 'row'+(moved?' moved':'');
         btn.type = 'button';
         btn.setAttribute('aria-label','Edit '+h.label);
 
-        let sub = '';
-        if(h.type === 'dca'){
+        let sub = '', behind = false;
+        if(h.type === 'cash'){
+          const bits = [];
+          if(h.rate) bits.push(h.rate+'% interest');
+          const opp = opportunity(h);
+          if(opp && opp.pct != null){
+            behind = opp.gap < 0;
+            bits.push((behind ? 'behind buying BTC by ' : 'ahead of buying BTC by ')+
+              fiatFmt(Math.abs(opp.gap), h.cur));
+          }else if(h.since){
+            bits.push('held since '+dateText(h.since));
+          }
+          sub = bits.join(' \u00B7 ');
+        }
+        else if(h.type === 'dca'){
           const acc = accrue(h);
           const scheds = h.schedules || [];
           const live = scheds.filter(sc => !sc.paused).length;
@@ -1352,9 +1556,11 @@ function render(){
           '<div class="row-main"><div class="row-label">'+escapeHtml(h.label)+
             (h.type==='watch' ? '<span class="tag">watched</span>' : '')+
             (h.type==='dca' ? '<span class="tag est">est.</span>' : '')+'</div>'+
-            (sub ? '<div class="row-sub'+(moved?' alert':'')+'">'+sub+'</div>' : '')+'</div>'+
-          '<div class="row-amt"><span class="a">'+(h.type==='dca'?'\u007E':'')+coinFmt(amt,8)+'</span>'+
-            (px ? '<span class="f">'+fiatFmt(amt*px,cur)+'</span>' : '')+'</div>'+
+            (sub ? '<div class="row-sub'+((moved || behind)?' alert':'')+'">'+sub+'</div>' : '')+'</div>'+
+          '<div class="row-amt"><span class="a">'+(h.type==='dca'?'\u007E':'')+
+            (h.type==='cash' ? money(amt, h.cur) : coinFmt(amt,8))+'</span>'+
+            (val != null && !(h.type==='cash' && h.cur===cur)
+              ? '<span class="f">'+fiatFmt(val,cur)+'</span>' : '')+'</div>'+
           '<span class="chev" aria-hidden="true">\u203A</span>';
         btn.onclick = () => openEdit(h.id);
         sec.appendChild(btn);
@@ -1374,6 +1580,19 @@ function render(){
     });
   }
   renderWhere();
+}
+
+/* Currency lives in Settings; this only lists what to price against. */
+const UNIT_LABEL = { xau:'GOLD', xag:'SILVER', sats:'SATS', months:'MONTHS' };
+const UNIT_LIST = UNITS.map(u => ({ u:u, label:UNIT_LABEL[u] }));
+
+function renderUnits(cur){
+  const sel = $('#cur');
+  const opts = ['<option value="">'+state.cur.toUpperCase()+'</option>'].concat(
+    UNIT_LIST.filter(d => d.u === 'months' || unitReady(d.u))
+      .map(d => '<option value="'+d.u+'">'+d.label+'</option>'));
+  sel.innerHTML = opts.join('');
+  sel.value = (state.unit && unitReady(state.unit)) ? state.unit : '';
 }
 
 function renderWhere(){
@@ -1411,16 +1630,26 @@ function openEdit(id){
   editId = id;
   draft = JSON.parse(JSON.stringify(h));   /* so Cancel really cancels */
   $('#sheetTitle').textContent = draft.type === 'watch' ? 'Edit watched wallet'
-    : draft.type === 'dca' ? 'Edit repeat buy' : 'Edit balance';
+    : draft.type === 'dca' ? 'Edit repeat buy'
+    : draft.type === 'cash' ? 'Edit cash' : 'Edit balance';
   $('#eLabel').value = draft.label;
   eMsg('');
   $('#eAddrNew').value = '';
-  const watching = draft.type === 'watch', dca = draft.type === 'dca';
-  $('#eAmtWrap').classList.toggle('hidden', watching || dca);
+  const watching = draft.type === 'watch', dca = draft.type === 'dca',
+        cash = draft.type === 'cash';
+  $('#eAmtWrap').classList.toggle('hidden', watching || dca || cash);
   $('#eAddrWrap').classList.toggle('hidden', !watching);
   $('#eDcaWrap').classList.toggle('hidden', !dca);
+  $('#eCashWrap').classList.toggle('hidden', !cash);
   if(watching){
     renderDraftAddrs();
+  }else if(cash){
+    $('#eCashCur').value = draft.cur;
+    $('#eCashAmt').value = draft.amount;
+    $('#eCashSince').value = draft.since || '';
+    $('#eCashSince').max = todayISO();
+    $('#eCashRate').value = draft.rate || '';
+    renderOpp();
   }else if(dca){
     schedEdit = -1;
     clearSchedForm();
@@ -1561,6 +1790,26 @@ $('#eSchedSave').onclick = () => {
 };
 $('#eSchedCancel').onclick = () => { schedEdit = -1; clearSchedForm(); renderScheds(); };
 
+function renderOpp(){
+  if(!draft || draft.type !== 'cash') return;
+  const el = $('#eCashOpp');
+  const opp = opportunity(draft);
+  if(!opp){
+    el.innerHTML = draft.since
+      ? 'No Bitcoin price for '+dateText(draft.since)+' yet \u2014 it is fetched on the next refresh.'
+      : 'Set a date and Assay will show what buying Bitcoin instead would have done.';
+    return;
+  }
+  const grew = (draft.rate && draft.since)
+    ? ' It grew from '+fiatFmt(opp.start, draft.cur)+' at '+draft.rate+'%.' : '';
+  el.innerHTML = '<b>'+fiatFmt(opp.start, draft.cur)+'</b> on '+dateText(draft.since)+
+    ' would have bought <b>'+coinFmt(opp.coins,8)+' BTC</b>, worth <b>'+
+    fiatFmt(opp.wouldBe, draft.cur)+'</b> today. You hold '+fiatFmt(opp.held, draft.cur)+
+    ', so the cash is <b>'+(opp.gap < 0 ? 'behind by ' : 'ahead by ')+
+    fiatFmt(Math.abs(opp.gap), draft.cur)+'</b>.'+grew+
+    ' That is opportunity cost against one volatile asset, not what the money buys in the shops.';
+}
+
 function renderSettle(){
   if(!draft || draft.type !== 'dca') return;
   const acc = accrue(draft);
@@ -1604,6 +1853,17 @@ $('#eSave').onclick = async () => {
       }
     }
     if(!draft.addresses.length) return eMsg('A watched wallet needs at least one address.');
+  }else if(draft.type === 'cash'){
+    const amount = parseFloat(($('#eCashAmt').value || '').replace(/[,\s\u00A3$\u20AC]/g,''));
+    if(!isFinite(amount) || amount < 0) return eMsg('Enter the balance, like 5000.');
+    const rate = parseFloat(($('#eCashRate').value || '').replace(/[,\s%]/g,'')) || 0;
+    if(rate < 0 || rate > 100) return eMsg('An interest rate has to be between 0 and 100.');
+    const since = $('#eCashSince').value || null;
+    if(since && since > todayISO()) return eMsg('The date it was held from cannot be in the future.');
+    draft.amount = amount;
+    draft.cur = $('#eCashCur').value;
+    draft.since = since;
+    draft.rate = rate;
   }else if(draft.type === 'dca'){
     if(!draft.schedules.length) return eMsg('A repeat buy needs at least one schedule.');
     if(schedEdit > -1) return eMsg('Finish editing that schedule first \u2014 save it or cancel.');
@@ -1676,6 +1936,16 @@ document.querySelectorAll('#eAmtMode button').forEach(b => b.onclick = () => {
   $('#eAmount').focus();
 });
 $('#eAmount').addEventListener('input', () => { forgetExact('#eAmount'); refreshConv(); });
+['eCashAmt','eCashSince','eCashRate','eCashCur'].forEach(id => {
+  $('#'+id).addEventListener('input', () => {
+    if(!draft || draft.type !== 'cash') return;
+    draft.amount = parseFloat(($('#eCashAmt').value||'').replace(/[,\s\u00A3$\u20AC]/g,'')) || 0;
+    draft.cur = $('#eCashCur').value;
+    draft.since = $('#eCashSince').value || null;
+    draft.rate = parseFloat(($('#eCashRate').value||'').replace(/[,\s%]/g,'')) || 0;
+    renderOpp();
+  });
+});
 $('#eAmtUnit').addEventListener('change', () => {
   if(!draft) return;
   convertField('#eAmount', '#eAmtUnit', draft.asset);
@@ -1704,12 +1974,16 @@ function syncForm(){
     b.setAttribute('aria-pressed', String(b.dataset.asset === form.asset)));
   document.querySelectorAll('#modeSeg button').forEach(b =>
     b.setAttribute('aria-pressed', String(b.dataset.mode === form.mode)));
+  const cash = form.asset === 'CASH';
   document.querySelector('#modeSeg button[data-mode="watch"]').classList.toggle('hidden', form.asset === 'XMR');
+  $('#modeSeg').classList.toggle('hidden', cash);
   const watching = form.asset === 'BTC' && form.mode === 'watch';
-  const dca = form.mode === 'dca';
+  const dca = !cash && form.mode === 'dca';
+  $('#wrapCash').classList.toggle('hidden', !cash);
   $('#wrapAddr').classList.toggle('hidden', !watching);
   $('#wrapDca').classList.toggle('hidden', !dca);
-  $('#wrapAmt').classList.toggle('hidden', watching || dca);
+  $('#wrapAmt').classList.toggle('hidden', cash || watching || dca);
+  if(cash){ $('#fCashCur').value = state.cur; }
   fillUnits($('#fAmtUnit'), form.asset, form.asset !== lastAsset);
   lastAsset = form.asset;
   showConv('#fAmount', '#fAmtUnit', '#fConv', form.asset, {});
@@ -1717,7 +1991,7 @@ function syncForm(){
 }
 document.querySelectorAll('#assetSeg button').forEach(b => b.onclick = () => {
   form.asset = b.dataset.asset;
-  if(form.asset === 'XMR' && form.mode === 'watch') form.mode = 'manual';
+  if(form.asset !== 'BTC' && form.mode === 'watch') form.mode = 'manual';
   msg(''); syncForm();
 });
 document.querySelectorAll('#modeSeg button').forEach(b => b.onclick = () => {
@@ -1729,7 +2003,21 @@ $('#addBtn').onclick = async () => {
   const label = $('#fLabel').value.trim();
   const watching = form.asset === 'BTC' && form.mode === 'watch';
 
-  if(watching){
+  if(form.asset === 'CASH'){
+    const amount = parseFloat(($('#fCashAmt').value || '').replace(/[,\s\u00A3$\u20AC]/g,''));
+    if(!isFinite(amount) || amount < 0) return msg('Enter the balance, like 5000.');
+    const rate = parseFloat(($('#fCashRate').value || '').replace(/[,\s%]/g,'')) || 0;
+    if(rate < 0 || rate > 100) return msg('An interest rate has to be between 0 and 100.');
+    const since = $('#fCashSince').value || null;
+    if(since && since > todayISO()) return msg('The date it was held from cannot be in the future.');
+    const c = $('#fCashCur').value;
+    state.holdings.push({ id:uid(), asset:'CASH', type:'cash',
+      label: label || 'Savings', cur:c, amount:amount, since:since, rate:rate });
+    $('#fCashAmt').value = ''; $('#fLabel').value = '';
+    msg('Added. It counts toward the total, and moves against whatever unit you price things in.', true);
+    await save(); render(); refresh();
+  }
+  else if(watching){
     const raw = $('#fAddr').value;
     if(looksLikeSecret(raw)){
       $('#fAddr').value = '';
@@ -1887,7 +2175,7 @@ $('#importFile').onchange = async e => {
     d = migrate(d);
     if(state.holdings.length && !confirm('Replace the '+state.holdings.length+' holding(s) on this device with the '+d.holdings.length+' in the backup?')) return;
     state.holdings = d.holdings;
-    if(d.cur && SYM[d.cur]){ state.cur = d.cur; $('#cur').value = d.cur; }
+    if(d.cur && isFiat(d.cur)) state.cur = d.cur;
     await save(); render();
     keepMsg('Restored '+d.holdings.length+' holding(s).', true);
     refresh();
@@ -1954,7 +2242,7 @@ addEventListener('appinstalled', async () => {
    A simple stack. Every level also pushes a history entry, so Android's
    back gesture steps back through screens instead of leaving the app.
    ===================================================================== */
-const TITLES = { settings:'Settings', add:'Add a holding', spend:'Living costs',
+const TITLES = { settings:'Settings', add:'Add a holding', cur:'Currency', spend:'Living costs',
   data:'Your data', diag:'Diagnostics', about:'How this works' };
 const stack = [];
 
@@ -1968,7 +2256,7 @@ function paintScreen(){
   document.body.classList.toggle('locked', !!top);
 
   if(onScreen){
-    ['settings','add','spend','data','diag','about'].forEach(name =>
+    ['settings','add','cur','spend','data','diag','about'].forEach(name =>
       $('#panel'+name.charAt(0).toUpperCase()+name.slice(1)).classList.toggle('hidden', name !== top));
     $('#screenTitle').textContent = TITLES[top] || '';
     $('#screen').scrollTop = 0;
@@ -2144,8 +2432,9 @@ function flash(text){
    CHROME + BOOT
    ===================================================================== */
 async function setUnit(v){
-  if(v === 'xau' || v === 'xag' || v === 'months') state.unit = v;
-  else { state.unit = ''; state.cur = v; }
+  if(isUnit(v)) state.unit = v;
+  else if(isFiat(v)){ state.unit = ''; state.cur = v; }
+  else return;                      /* never let a unit become the currency */
   await save();
   render();
   const cur = changeCur();
@@ -2154,11 +2443,28 @@ async function setUnit(v){
   }
 }
 
-$('#cur').onchange = e => setUnit(e.target.value);
+$('#cur').onchange = async e => {
+  const v = e.target.value;
+  /* months needs a figure from you before it can mean anything */
+  if(v === 'months' && !state.spend){ e.target.value = state.unit || ''; return goto('spend'); }
+  await setUnit(v || state.cur);
+};
+
+document.querySelectorAll('#curList button').forEach(b => b.onclick = async () => {
+  state.cur = b.dataset.cur;
+  state.unit = '';
+  await save();
+  render();
+  back();
+  const c = changeCur();
+  if(!state.changes || !state.changes[c]){
+    if(await fetchChanges(c)){ await save(); render(); }
+  }
+});
 
 /* Tapping the total cycles through whichever units are actually available. */
 async function cycleUnit(){
-  const ring = ['', 'xau', 'xag', 'months'].filter(u => unitReady(u));
+  const ring = [''].concat(UNITS).filter(u => unitReady(u));
   if(ring.length < 2) return;
   const at = ring.indexOf(state.unit || '');
   await setUnit(ring[(at + 1) % ring.length] || state.cur);
@@ -2220,7 +2526,6 @@ if('serviceWorker' in navigator && location.protocol === 'https:'){
   const saved = migrate(await store.get());
   if(saved && Array.isArray(saved.holdings)) state = Object.assign(state, saved);
   deriveMonths();   /* prices are restored from disk before any fetch */
-  $('#cur').value = state.cur;
   syncForm();
   render();                 /* saved figures paint before any network call */
   await checkPersist();
