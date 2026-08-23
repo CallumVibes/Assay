@@ -95,7 +95,10 @@ body.locked{overflow:hidden}
   display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
 .chg .dir{font-weight:500;font-variant-numeric:tabular-nums}
 .chg .abs{color:var(--mute);font-variant-numeric:tabular-nums}
-.chg .per{color:var(--mute);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase}
+.chg .per{color:var(--mute);font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+  background:none;border:1px solid var(--rule);border-radius:2px;padding:2px 6px;
+  font-family:var(--mono);cursor:pointer;transition:color .15s,border-color .15s}
+.chg .per:hover,.chg .per:focus-visible{color:var(--brass);border-color:var(--brass-lo)}
 .masked .chg .abs{filter:blur(7px)}
 .coinline{font-family:var(--mono);font-size:13.5px;color:var(--mute);
   display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:8px}
@@ -589,7 +592,7 @@ input[type=text]:focus,textarea:focus{outline:2px solid var(--brass);outline-off
 /* =====================================================================
    STORAGE — device-local, survives refresh, close and reboot.
    ===================================================================== */
-const SHELL_TAG = 'v20';
+const SHELL_TAG = 'v21';
 const KEY = 'assay:v1';
 const store = (() => {
   try{
@@ -630,11 +633,13 @@ async function askPersist(){
 /* =====================================================================
    STATE
    ===================================================================== */
-let state = { v:4, cur:'gbp', unit:'', spend:null, holdings:[], masked:false,
-  prices:null, history:{}, installDismissed:false };
+let state = { v:4, cur:'gbp', unit:'', spend:null, period:'24h', holdings:[], masked:false,
+  prices:null, changes:{}, history:{}, installDismissed:false };
 const SYM = { gbp:'\u00A3', usd:'$', eur:'\u20AC', xau:'', xag:'', months:'' };
 const METALS = { xau:'gold', xag:'silver' };
 const UNIT_NAME = { xau:'gold', xag:'silver', months:'months of costs' };
+const PERIODS = ['24h','7d','30d','1y'];
+const PERIOD_WORD = { '24h':'today', '7d':'this week', '30d':'this month', '1y':'this year' };
 const OZ_G = 31.1034768;   /* one troy ounce, in grams */
 const $ = s => document.querySelector(s);
 let offline = !navigator.onLine;
@@ -672,6 +677,8 @@ function migrate(s){
     }
   });
   if(!s.history) s.history = {};
+  if(!s.changes) s.changes = {};
+  if(!s.period) s.period = '24h';
   if(s.gold && !s.unit) s.unit = 'xau';   /* v4 had a gold on/off flag */
   delete s.gold;
   s.v = 4;
@@ -1050,6 +1057,37 @@ async function fetchHistory(asset, cur){
   }catch(e){ /* keep whatever is cached */ }
 }
 
+/* /simple/price only carries 24h. /coins/markets gives every period we
+   offer, in whichever unit is on screen, in a single call. */
+function changeCur(){
+  const c = displayCur();
+  return c === 'months' ? (state.spend ? state.spend.cur : state.cur) : c;
+}
+
+async function fetchChanges(cur){
+  if(!cur) return false;
+  try{
+    const r = await fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency='+
+      encodeURIComponent(cur)+'&ids=bitcoin,monero&price_change_percentage='+PERIODS.join(','),
+      {cache:'no-store'});
+    if(!r.ok) throw new Error(r.status);
+    const rows = await r.json();
+    if(!Array.isArray(rows)) throw new Error('shape');
+    const out = { at:Date.now(), btc:{}, xmr:{} };
+    rows.forEach(row => {
+      const k = row.id === 'bitcoin' ? 'btc' : row.id === 'monero' ? 'xmr' : null;
+      if(!k) return;
+      PERIODS.forEach(p => {
+        const v = row['price_change_percentage_'+p+'_in_currency'];
+        if(v != null && isFinite(v)) out[k][p] = v;
+      });
+    });
+    if(!state.changes) state.changes = {};
+    state.changes[cur] = out;
+    return true;
+  }catch(e){ return false; }
+}
+
 async function fetchAddress(addr){
   const r = await fetch(MEMPOOL+'/address/'+encodeURIComponent(addr), {cache:'no-store'});
   if(r.status === 400) throw new Error('rejected as invalid');
@@ -1097,6 +1135,7 @@ async function refresh(){
   await Promise.all([
     fetchPrices()
       .then(ok => { offline = !ok; })
+      .then(() => fetchChanges(changeCur()))
       .then(() => pool(pairs, 2, async k => {
         const parts = k.split('|');
         await fetchHistory(parts[0], parts[1]);
@@ -1137,11 +1176,17 @@ const hasMoved = h => h.type === 'watch' && h.addresses.some(a => a.moved);
 /* Value what you hold now at today's price and at the price 24h ago.
    The coin amounts are identical in both, so buying more cannot move this
    figure — only the market can. */
-function assetChange(asset, cur){
-  const p = state.prices;
-  if(!p) return null;
-  const src = asset === 'BTC' ? p.btc : p.xmr;
-  const v = src ? src[cur+'_24h_change'] : null;
+function assetChange(asset, cur, period){
+  period = period || state.period || '24h';
+  /* months is a constant divisor, so its move is the underlying cash move */
+  const cc = cur === 'months' ? (state.spend ? state.spend.cur : state.cur) : cur;
+  const k = asset === 'BTC' ? 'btc' : 'xmr';
+  const box = state.changes && state.changes[cc];
+  let v = (box && box[k]) ? box[k][period] : null;
+  if(v == null && period === '24h' && state.prices){
+    const src = state.prices[k];               /* the cheap 24h figure */
+    v = src ? src[cc+'_24h_change'] : null;
+  }
   return (v == null || !isFinite(v) || v <= -100) ? null : v;
 }
 
@@ -1206,18 +1251,29 @@ function render(){
     : '';
 
   const chg = priceChange(cur, btcAmt, xmrAmt, btcPx, xmrPx);
+  const per = PERIOD_WORD[state.period] || state.period;
   const chgEl = $('#chg');
-  if(chg){
+  const periodBtn = '<button class="per" type="button" id="periodBtn" title="change '+per+
+    '" aria-label="Period: '+state.period+'. Tap to change.">'+state.period+'</button>';
+
+  if(!state.holdings.length || !p){
+    chgEl.className = 'chg hidden';
+    chgEl.innerHTML = '';
+  }else if(chg){
     const up = chg.pct > 0.005, down = chg.pct < -0.005;
     chgEl.className = 'chg ' + (up ? 'up' : down ? 'down' : 'flat');
     chgEl.innerHTML =
       chip(chg.pct, 2).replace('class="chip ','class="dir chip ')+
       '<span class="abs">'+(chg.abs < 0 ? '\u2212' : '+')+fiatFmt(Math.abs(chg.abs),cur)+'</span>'+
-      '<span class="per">24h</span>';
+      periodBtn;
   }else{
-    chgEl.className = 'chg hidden';
-    chgEl.innerHTML = '';
+    /* No figure for this period \u2014 keep the control visible, or there
+       would be no way back to a period that does have one. */
+    chgEl.className = 'chg flat';
+    chgEl.innerHTML = '<span class="dir">\u2014</span>'+
+      '<span class="abs">no '+state.period+' figure yet</span>'+periodBtn;
   }
+  if($('#periodBtn')) $('#periodBtn').onclick = cyclePeriod;
 
   const estB = estimatedIn('BTC'), estM = estimatedIn('XMR');
   const note = $('#estNote');
@@ -2092,6 +2148,10 @@ async function setUnit(v){
   else { state.unit = ''; state.cur = v; }
   await save();
   render();
+  const cur = changeCur();
+  if(!state.changes || !state.changes[cur]){
+    if(await fetchChanges(cur)){ await save(); render(); }
+  }
 }
 
 $('#cur').onchange = e => setUnit(e.target.value);
@@ -2107,6 +2167,18 @@ $('#fiat').onclick = cycleUnit;
 $('#fiat').addEventListener('keydown', e => {
   if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); cycleUnit(); }
 });
+
+async function cyclePeriod(){
+  const at = PERIODS.indexOf(state.period);
+  state.period = PERIODS[(at + 1) % PERIODS.length];
+  await save();
+  render();
+  const cur = changeCur();
+  const box = state.changes && state.changes[cur];
+  if(!box || !box.btc || box.btc[state.period] == null){
+    if(await fetchChanges(cur)){ await save(); render(); }
+  }
+}
 
 $('#spendSave').onclick = async () => {
   const v = parseFloat(($('#spendAmt').value || '').replace(/[,\s\u00A3$\u20AC]/g,''));
