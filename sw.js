@@ -5,7 +5,7 @@
      When they fail, the app falls back to the figures it saved on device.
    Bump SHELL_VERSION whenever index.html changes to push the update out. */
 
-const SHELL_VERSION = 'assay-shell-v26';
+const SHELL_VERSION = 'assay-shell-v27';
 const FONT_CACHE    = 'assay-fonts-v1';
 
 /* CORE must cache for offline to work at all. EXTRA is best-effort:

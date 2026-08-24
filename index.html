@@ -657,7 +657,7 @@ input[type=text]:focus,textarea:focus{outline:2px solid var(--brass);outline-off
 /* =====================================================================
    STORAGE — device-local, survives refresh, close and reboot.
    ===================================================================== */
-const SHELL_TAG = 'v26';
+const SHELL_TAG = 'v27';
 const KEY = 'assay:v1';
 const store = (() => {
   try{
@@ -1348,6 +1348,29 @@ function cashChange(cashCur, cur, period){
   return isFinite(f) ? (f - 1)*100 : null;
 }
 
+/* What the unit itself did against your currency. Gold rising 1.2% while
+   Bitcoin rises 21.8% is exactly why BTC-vs-gold reads ~20%: the two are
+   nearly the same number because gold barely moved. Showing this makes the
+   figure checkable instead of something to take on trust. */
+function unitOwnChange(unit, period){
+  if(!unit || unit === state.cur) return null;
+  if(unit === 'months') return 0;      /* a fixed divisor cannot move */
+  const inCur = assetChange('BTC', state.cur, period);
+  const inUnit = assetChange('BTC', unit, period);
+  if(inCur == null || inUnit == null) return null;
+  const f = (1 + inCur/100)/(1 + inUnit/100);
+  return isFinite(f) ? (f - 1)*100 : null;
+}
+
+/* Price of one unit in your currency, e.g. an ounce of gold in pounds. */
+function unitPrice(unit){
+  if(!unit || unit === 'months') return null;
+  const p = state.prices;
+  if(!p || !p.btc) return null;
+  const a = p.btc[state.cur], b = p.btc[unit];
+  return (a != null && b != null && b !== 0) ? a/b : null;
+}
+
 function assetChange(asset, cur, period){
   period = period || state.period || '24h';
   if(asset === 'CASH'){
@@ -1443,7 +1466,22 @@ function render(){
       ' price \u2014 showing '+state.cur.toUpperCase()+'</span>';
   else if(!p) $('#prices').innerHTML = '<span class="warn">No prices yet \u2014 coin amounts still add up</span>';
   else if(p.partial && !xmrPx) $('#prices').innerHTML = bits.join('   \u00B7   ')+'   \u00B7   <span class="warn">no Monero price</span>';
-  else $('#prices').textContent = bits.join('   \u00B7   ');
+  else {
+    let line = bits.join('   \u00B7   ');
+    /* When priced in something other than cash, show what that something
+       did too, so the headline percentage can be checked. */
+    const own = unitOwnChange(cur, state.period);
+    const up = unitPrice(cur);
+    if(own != null && cur !== 'months'){
+      const bit = (UNIT_NAME[cur] || cur)+' '+
+        (up ? money(up, state.cur)+' ' : '')+
+        (own >= 0 ? '\u2191' : '\u2193')+Math.abs(own).toFixed(1)+'% '+state.period;
+      line += '   \u00B7   '+bit;
+    }else if(cur === 'months'){
+      line += '   \u00B7   same % as '+state.cur.toUpperCase()+', costs are fixed';
+    }
+    $('#prices').textContent = line;
+  }
   $('#stamp').innerHTML = p
     ? (offline ? '<span class="warn">offline \u00B7 '+ago(p.at)+'</span>' : 'checked '+ago(p.at))
     : '';
